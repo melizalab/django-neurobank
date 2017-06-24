@@ -13,26 +13,26 @@ This software is licensed for you to use under the Gnu Public License, version 3
 
 1. Install the package from source: `python setup.py install`. Worth putting in a virtualenv.
 
-1. Add `django_neurobank` to your INSTALLED_APPS setting like this:
+1. Add `neurobank` to your INSTALLED_APPS setting like this:
 
 ```python
 INSTALLED_APPS = (
     ...
-    'django_neurobank',
+    'neurobank',
 )
 ```
 
 2. Include the neurobank URLconf in your project urls.py like this::
 
 ```python
-url(r'^neurobank/', include(django_neurobank.urls')),
+url(r'^neurobank/', include(neurobank.urls')),
 ```
 
 3. Run `python manage.py migrate` to create the database tables.
 
 # edit below
 
-4. Start the development server and visit http://127.0.0.1:8000/admin/django_neurobank/
+4. Start the development server and visit http://127.0.0.1:8000/admin/neurobank/
    to create birds, events, etc. (you'll need the Admin app enabled).
 
-5. Visit http://127.0.0.1:8000/birds/ to use views.
+5. Visit http://127.0.0.1:8000/neurobank/ to use views.

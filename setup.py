@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # -*- mode: python -*-
+import os
 import sys
 if sys.hexversion < 0x02060000:
     raise RuntimeError("Python 2.6 or higher required")
@@ -26,6 +27,6 @@ setup(
     author='C Daniel Meliza',
     maintainer='C Daniel Meliza',
     url = "https://github.com/melizalab/django-neurobank",
-    packages=['django_neurobank'],
+    packages=['neurobank'],
     include_package_data=True,
 )
