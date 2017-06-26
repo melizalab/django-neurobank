@@ -43,13 +43,10 @@ class Domain(models.Model):
     """A domain defines a method and authority for locating a resource"""
     name = models.CharField(max_length=32, unique=True, help_text="A descriptive name")
     scheme = models.CharField(max_length=16)
-    root = models.CharField(max_length=512, help_text="Root path for resources.")
+    root = models.CharField(max_length=512, help_text="Root path for resources")
 
     def __str__(self):
         return self.name
-
-    # def url(self):
-    #     return "/".join((self.scheme, self.root))
 
 
 @python_2_unicode_compatible
@@ -60,6 +57,3 @@ class Location(models.Model):
 
     def __str__(self):
         return ":".join((self.domain.name, str(self.resource)))
-
-    # def url(self):
-    #     return "/".join((self.domain.url(), str(self.resource), ""))
