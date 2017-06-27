@@ -57,3 +57,6 @@ class Location(models.Model):
 
     def __str__(self):
         return ":".join((self.domain.name, str(self.resource)))
+
+    class Meta:
+        unique_together = ("resource", "domain")

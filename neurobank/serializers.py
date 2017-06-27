@@ -38,8 +38,14 @@ class DomainSerializer(serializers.ModelSerializer):
         fields = ('name', 'scheme', 'root')
 
 
-# class LocationSerializer(serializers.ModelSerializer):
+class LocationSerializer(serializers.ModelSerializer):
+    domain_name = serializers.SlugRelatedField(source="domain",
+                                               queryset=Domain.objects.all(), slug_field="name")
+    resource_name = serializers.SlugRelatedField(source="resource",
+                                                 queryset=Resource.objects.all(), slug_field="name")
+    scheme = serializers.ReadOnlyField(source="domain.scheme")
+    root = serializers.ReadOnlyField(source="domain.root")
 
-#     class Meta:
-#         model = DataType
-#         fields = ('url',)
+    class Meta:
+        model = Location
+        fields = ('domain_name', 'scheme', 'root', 'resource_name')
