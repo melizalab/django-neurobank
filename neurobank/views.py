@@ -9,7 +9,7 @@ class ResourceList(generics.ListCreateAPIView):
     serializer_class = serializers.ResourceSerializer
 
 
-class ResourceDetail(generics.RetrieveUpdateDestroyAPIView):
+class ResourceDetail(generics.RetrieveUpdateAPIView):
     queryset = models.Resource.objects.all()
     serializer_class = serializers.ResourceSerializer
 
@@ -27,7 +27,7 @@ class DomainList(generics.ListCreateAPIView):
             pass
         return qs
 
-class DomainDetail(generics.RetrieveUpdateDestroyAPIView):
+class DomainDetail(generics.RetrieveUpdateAPIView):
     lookup_field = "name"
     queryset = models.Domain.objects.all()
     serializer_class = serializers.DomainSerializer
@@ -46,7 +46,7 @@ class DataTypeList(generics.ListCreateAPIView):
     serializer_class = serializers.DataTypeSerializer
 
 
-class DataTypeDetail(generics.RetrieveUpdateDestroyAPIView):
+class DataTypeDetail(generics.RetrieveUpdateAPIView):
     lookup_field = "name"
     queryset = models.DataType.objects.all()
     serializer_class = serializers.DataTypeSerializer
@@ -71,3 +71,13 @@ class LocationList(generics.ListAPIView):
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class LocationDetail(generics.RetrieveDestroyAPIView):
+    serializer_class = serializers.LocationSerializer
+
+    def get_object(self):
+        return get_object_or_404(models.Location,
+                                 resource=self.kwargs["resource_pk"],
+                                 domain__name=self.kwargs["domain_pk"]
+        )

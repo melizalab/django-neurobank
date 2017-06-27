@@ -15,6 +15,6 @@ urlpatterns = [
     url(r"^resources/(?P<pk>[a-f0-9\-]{36})/$", views.ResourceDetail.as_view(),
         name='resource'),
     url(r"^resources/(?P<resource_pk>[a-f0-9\-]{36})/locations/$", views.LocationList.as_view()),
-    # url(r"^resources/(?P<resource_pk>[a-f0-9\-]{36})/locations/(?P<name>[\w-]+)/$",
-    #     views.DomainDetail.as_view())
+    url(r"^resources/(?P<resource_pk>[a-f0-9\-]{36})/locations/(?P<domain_pk>[\w-]+)/$",
+        views.LocationDetail.as_view())
 ]
