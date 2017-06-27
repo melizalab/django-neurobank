@@ -39,7 +39,6 @@ class DomainSerializer(serializers.ModelSerializer):
 
 
 # class LocationSerializer(serializers.ModelSerializer):
-#     url = serializers.CharField()
 
 #     class Meta:
 #         model = DataType

@@ -31,7 +31,7 @@ class Resource(models.Model):
 @python_2_unicode_compatible
 class DataType(models.Model):
     """A datatype has a name and an optional link to a specification"""
-    name = models.CharField(max_length=32, unique=True)
+    name = models.SlugField(max_length=32, unique=True)
     content_type = models.CharField(max_length=128, blank=True, null=True)
 
     def __str__(self):
@@ -41,9 +41,9 @@ class DataType(models.Model):
 @python_2_unicode_compatible
 class Domain(models.Model):
     """A domain defines a method and authority for locating a resource"""
-    name = models.CharField(max_length=32, unique=True, help_text="A descriptive name")
+    name = models.SlugField(max_length=32, unique=True, help_text="a descriptive name")
     scheme = models.CharField(max_length=16)
-    root = models.CharField(max_length=512, help_text="Root path for resources")
+    root = models.CharField(max_length=512, help_text="root path for resources")
 
     def __str__(self):
         return self.name
