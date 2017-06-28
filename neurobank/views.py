@@ -1,8 +1,33 @@
+# -*- coding: utf-8 -*-
+# -*- mode: python -*-
 from django.shortcuts import render, get_object_or_404
 from rest_framework import generics, mixins, status
 from rest_framework.response import Response
+from django_filters import rest_framework as filters
+
 from neurobank import models
 from neurobank import serializers
+
+
+# class ResourceFilter(filters.FilterSet):
+#     name = filters.CharFilter(name="name", lookup_expr="istartswith")
+#     sha1 = filters.CharFilter(name="sha1", lookup_expr="istartswith")
+#     dtype = filters.CharFilter(name="dtype__name", lookup_expr="icontains")
+#     location = filters.CharFilter(name="locations__name", lookup_expr="icontains")
+
+#     class Meta:
+#         model = models.Resource
+#         fields = {
+#             'registered': ['exact', 'year', 'range'],
+#         }
+
+
+# class DomainFilter(filters.FilterSet):
+#     name = filters.CharFilter(name="name", lookup_expr = "icontains")
+#     scheme = filters.CharFilter(name="scheme", lookup_expr = "istartswith")
+#     class Meta:
+#         model = models.Domain
+
 
 class ResourceList(generics.ListCreateAPIView):
     queryset = models.Resource.objects.all()
