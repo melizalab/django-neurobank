@@ -71,7 +71,7 @@ class DataTypeList(generics.ListCreateAPIView):
     serializer_class = serializers.DataTypeSerializer
 
 
-class DataTypeDetail(generics.RetrieveUpdateAPIView):
+class DataTypeDetail(generics.RetrieveAPIView):
     lookup_field = "name"
     queryset = models.DataType.objects.all()
     serializer_class = serializers.DataTypeSerializer
@@ -89,8 +89,9 @@ class LocationList(generics.ListAPIView):
         return resource.location_set.all()
 
     def post(self, request, *args, **kwargs):
-        request.data["resource_name"] = kwargs["resource_pk"]
-        serializer = serializers.LocationSerializer(data=request.data)
+        data = {"domain_name": request.data["domain_name"],
+                "resource_name": kwargs["resource_pk"]}
+        serializer = serializers.LocationSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
