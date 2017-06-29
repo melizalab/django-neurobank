@@ -32,10 +32,44 @@ class ResourceTests(APITestCase):
         response = self.client.get(reverse('neurobank:resource-list'))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
+    def test_can_create_resource(self):
+        response = self.client.post(reverse('neurobank:resource-list'),
+                                    {"dtype": self.dtype.name,})
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        response2 = self.client.get(reverse('neurobank:resource',
+                                            args=[response.data["name"]]))
+        self.assertEqual(response2.status_code, status.HTTP_200_OK)
+
     def test_can_access_resource_detail(self):
         response = self.client.get(reverse('neurobank:resource', args=[self.resource.name]))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertDictContainsSubset({
+            "name": str(self.resource.name),
+            "sha1": self.resource.sha1,
+            "dtype": self.dtype.name,
+            "metadata": self.resource.metadata,
+            "locations": [self.domain.name]}, response.data)
 
-    def test_nonexistent_resource_detail(self):
+    def test_cannot_access_nonexistent_resource_detail(self):
         response = self.client.get(reverse('neurobank:resource', args=[uuid.uuid4()]))
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_cannot_delete_resource(self):
+        response = self.client.delete(reverse('neurobank:resource', args=[self.resource.name]))
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_cannot_modify_name(self):
+        response = self.client.patch(reverse('neurobank:resource', args=[self.resource.name]),
+                                     {"name": str(uuid.uuid4())})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cannot_modify_sha1(self):
+        response = self.client.patch(reverse('neurobank:resource', args=[self.resource.name]),
+                                     {"sha1": hashlib.sha1(b"blah").hexdigest()})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_can_update_metadata(self):
+        response = self.client.patch(reverse('neurobank:resource', args=[self.resource.name]),
+                                     {"metadata": {"test_field": "value"}}, format="json")
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertDictContainsSubset({"test_field": "value"}, response.data["metadata"])

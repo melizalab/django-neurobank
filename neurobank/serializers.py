@@ -11,8 +11,8 @@ sha1_re = re.compile(r"[0-9a-fA-F]{40}")
 
 class ResourceSerializer(serializers.ModelSerializer):
     dtype = serializers.SlugRelatedField(queryset=DataType.objects.all(), slug_field='name')
-    locations = serializers.SlugRelatedField(queryset=Domain.objects.all(),
-                                             required=False, many=True, slug_field='name')
+    locations = serializers.SlugRelatedField(
+                                             read_only=True, many=True, slug_field='name')
 
     def validate_sha1(self, value):
         if self.instance is not None and self.instance.sha1 != value:
@@ -20,10 +20,13 @@ class ResourceSerializer(serializers.ModelSerializer):
         if sha1_re.match(value) is None:
             raise serializers.ValidationError("invalid sha1 value")
 
+    def validate_name(self, value):
+        raise serializers.ValidationError("name is auto-assigned and cannot be set or updated")
+
     class Meta:
         model = Resource
         fields = ('name', 'sha1', 'dtype', 'registered', 'metadata', 'locations')
-        read_only_fields = ('name', 'registered')
+        read_only_fields = ('registered',)
 
 
 class DataTypeSerializer(serializers.ModelSerializer):
