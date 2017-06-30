@@ -37,6 +37,11 @@ class ResourceList(generics.ListCreateAPIView):
     filter_backends = (filters.DjangoFilterBackend,)
     filter_class = ResourceFilter
 
+    def filter_queryset(self, queryset):
+        qs = super(ResourceList, self).filter_queryset(queryset)
+        # this could be a little dangerous b/c we're letting the user design queries
+        mq = {k: v for k,v in self.request.GET.items() if k.startswith("metadata__")}
+        return qs.filter(**mq)
 
 class ResourceDetail(generics.RetrieveUpdateAPIView):
     queryset = models.Resource.objects.all()
@@ -48,25 +53,11 @@ class DomainList(generics.ListCreateAPIView):
     queryset = models.Domain.objects.all()
     serializer_class = serializers.DomainSerializer
 
-    def filter_queryset(self, queryset):
-        qs = super(DomainList, self).filter_queryset(queryset)
-        try:
-            qs = qs.filter(resource=self.kwargs["resource_pk"])
-        except KeyError:
-            pass
-        return qs
 
 class DomainDetail(generics.RetrieveUpdateAPIView):
     lookup_field = "name"
     queryset = models.Domain.objects.all()
     serializer_class = serializers.DomainSerializer
-
-    def filter_queryset(self, queryset):
-        try:
-            queryset = queryset.filter(resource=self.kwargs["resource_pk"])
-        except KeyError:
-            pass
-        return queryset
 
 
 class DataTypeList(generics.ListCreateAPIView):

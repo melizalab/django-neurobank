@@ -270,12 +270,12 @@ class ResourceFilterTests(APITestCase):
         self.assertEqual(len(response.data), 1)
 
 
-    # def test_can_filter_by_metadata(self):
-    #     response = self.client.get(reverse('neurobank:resource-list'),
-    #                                {"metadata__experimenter": "mcb2x"})
-    #     self.assertEqual(response.status_code, status.HTTP_200_OK)
-    #     self.assertEqual(len(response.data), 1)
-    #     self.assertEqual(response.data[0]["name"], str(self.resource2.name))
+    def test_can_filter_by_metadata(self):
+        response = self.client.get(reverse('neurobank:resource-list'),
+                                   {"metadata__experimenter": "mcb2x"})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["name"], str(self.resource2.name))
 
 
 class LocationFilterTests(APITestCase):
