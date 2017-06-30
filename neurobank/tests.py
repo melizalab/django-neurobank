@@ -207,3 +207,110 @@ class DomainTests(APITestCase):
         response = self.client.patch(reverse("neurobank:domain", args=[self.domain.name]),
                                      {"name": "local_intrac"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
+class ResourceFilterTests(APITestCase):
+
+    def setUp(self):
+        self.dtype1 = DataType.objects.create(
+            name="spike_times",
+            content_type="application/vnd.meliza-org.pproc+json; version=1.0")
+        self.dtype2 = DataType.objects.create(
+            name="acoustic_waveform",
+            content_type="audio/wav")
+        self.domain_local = Domain.objects.create(
+            name="local",
+            scheme="neurobank",
+            root="/home/data/intracellular")
+        self.domain_remote = Domain.objects.create(
+            name="remote",
+            scheme="http",
+            root="/meliza.org/data/intracellular")
+        self.resource1 = Resource.objects.create(
+            sha1=hashlib.sha1(b"").hexdigest(),
+            dtype=self.dtype1,
+            metadata={"experimenter": "dmeliza"})
+        Location.objects.create(
+            resource=self.resource1,
+            domain=self.domain_local)
+        Location.objects.create(
+            resource=self.resource1,
+            domain=self.domain_remote)
+        self.resource2 = Resource.objects.create(
+            dtype=self.dtype2,
+            metadata={"experimenter": "mcb2x"})
+        Location.objects.create(
+            resource=self.resource2,
+            domain=self.domain_local)
+
+    def test_can_filter_by_uuid(self):
+        response = self.client.get(reverse('neurobank:resource-list'),
+                                   {"name": str(self.resource1.name)[:6]})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["name"], str(self.resource1.name))
+
+    def test_can_filter_by_dtype(self):
+        response = self.client.get(reverse('neurobank:resource-list'),
+                                   {"dtype": self.dtype1.name})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["name"], str(self.resource1.name))
+
+    def test_can_filter_by_location(self):
+        response = self.client.get(reverse('neurobank:resource-list'),
+                                   {"location": self.domain_local.name})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+
+    def test_can_filter_by_scheme(self):
+        response = self.client.get(reverse('neurobank:resource-list'),
+                                   {"scheme": self.domain_remote.scheme})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+
+
+    # def test_can_filter_by_metadata(self):
+    #     response = self.client.get(reverse('neurobank:resource-list'),
+    #                                {"metadata__experimenter": "mcb2x"})
+    #     self.assertEqual(response.status_code, status.HTTP_200_OK)
+    #     self.assertEqual(len(response.data), 1)
+    #     self.assertEqual(response.data[0]["name"], str(self.resource2.name))
+
+
+class LocationFilterTests(APITestCase):
+
+    def setUp(self):
+        self.dtype = DataType.objects.create(
+            name="spike_times",
+            content_type="application/vnd.meliza-org.pproc+json; version=1.0")
+        self.domain_local = Domain.objects.create(
+            name="local",
+            scheme="neurobank",
+            root="/home/data/intracellular")
+        self.domain_remote = Domain.objects.create(
+            name="remote",
+            scheme="http",
+            root="/meliza.org/data/intracellular")
+        self.resource = Resource.objects.create(
+            sha1=hashlib.sha1(b"").hexdigest(),
+            dtype=self.dtype,
+            metadata={"experimenter": "dmeliza"})
+        Location.objects.create(
+            resource=self.resource,
+            domain=self.domain_local)
+        Location.objects.create(
+            resource=self.resource,
+            domain=self.domain_remote)
+
+    def test_can_filter_by_name(self):
+        url = reverse('neurobank:location-list', args=[self.resource.name])
+        response = self.client.get(url, {"name": self.domain_local.name[:4]})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+
+    def test_can_filter_by_scheme(self):
+        url = reverse('neurobank:location-list', args=[self.resource.name])
+        response = self.client.get(url, {"scheme": self.domain_remote.scheme})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)

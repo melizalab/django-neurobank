@@ -4,7 +4,7 @@ import os
 import sys
 if sys.hexversion < 0x02060000:
     raise RuntimeError("Python 2.6 or higher required")
-from setuptools import setup, find_packages
+from setuptools import setup
 
 VERSION = '0.6.0'
 cls_txt = """

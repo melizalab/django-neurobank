@@ -9,29 +9,33 @@ from neurobank import models
 from neurobank import serializers
 
 
-# class ResourceFilter(filters.FilterSet):
-#     name = filters.CharFilter(name="name", lookup_expr="istartswith")
-#     sha1 = filters.CharFilter(name="sha1", lookup_expr="istartswith")
-#     dtype = filters.CharFilter(name="dtype__name", lookup_expr="icontains")
-#     location = filters.CharFilter(name="locations__name", lookup_expr="icontains")
+class ResourceFilter(filters.FilterSet):
+    name = filters.CharFilter(name="name", lookup_expr="istartswith")
+    sha1 = filters.CharFilter(name="sha1", lookup_expr="istartswith")
+    dtype = filters.CharFilter(name="dtype__name", lookup_expr="icontains")
+    location = filters.CharFilter(name="locations__name", lookup_expr="icontains")
+    scheme = filters.CharFilter(name="locations__scheme", lookup_expr="istartswith")
 
-#     class Meta:
-#         model = models.Resource
-#         fields = {
-#             'registered': ['exact', 'year', 'range'],
-#         }
+    class Meta:
+        model = models.Resource
+        fields = {
+            'registered': ['exact', 'year', 'range'],
+        }
 
 
-# class DomainFilter(filters.FilterSet):
-#     name = filters.CharFilter(name="name", lookup_expr = "icontains")
-#     scheme = filters.CharFilter(name="scheme", lookup_expr = "istartswith")
-#     class Meta:
-#         model = models.Domain
+class LocationFilter(filters.FilterSet):
+    name = filters.CharFilter(name="domain__name", lookup_expr = "icontains")
+    scheme = filters.CharFilter(name="domain__scheme", lookup_expr = "istartswith")
+    class Meta:
+        model = models.Location
+        fields = ["name", "scheme"]
 
 
 class ResourceList(generics.ListCreateAPIView):
     queryset = models.Resource.objects.all()
     serializer_class = serializers.ResourceSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filter_class = ResourceFilter
 
 
 class ResourceDetail(generics.RetrieveUpdateAPIView):
@@ -80,6 +84,8 @@ class DataTypeDetail(generics.RetrieveAPIView):
 class LocationList(generics.ListAPIView):
     """List locations for a specific resource """
     serializer_class = serializers.LocationSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filter_class = LocationFilter
 
     def get_object(self):
         return get_object_or_404(models.Resource, pk=self.kwargs["resource_pk"])

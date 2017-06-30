@@ -22,6 +22,8 @@ INSTALLED_APPS = (
 )
 ```
 
+You'll also need to add Make sure you have `rest_framework` and `django_filters` if you want to use the browseable API.
+
 2. Include the neurobank URLconf in your project urls.py like this::
 
 ```python
@@ -30,9 +32,5 @@ url(r'^neurobank/', include(neurobank.urls')),
 
 3. Run `python manage.py migrate` to create the database tables.
 
-# edit below
-
-4. Start the development server and visit http://127.0.0.1:8000/admin/neurobank/
-   to create birds, events, etc. (you'll need the Admin app enabled).
-
-5. Visit http://127.0.0.1:8000/neurobank/ to use views.
+4. Start the development server and point your browser to http://127.0.0.1:8000/neurobank/
+   to view records and inspect the API.
