@@ -3,10 +3,21 @@
 from django.shortcuts import render, get_object_or_404
 from rest_framework import generics, mixins, status, permissions
 from rest_framework.response import Response
+from rest_framework.decorators import api_view
+from rest_framework.reverse import reverse
 from django_filters import rest_framework as filters
 
 from neurobank import models
 from neurobank import serializers
+
+
+@api_view(['GET'])
+def api_root(request, format=None):
+    return Response({
+        'resources': reverse('neurobank:resource-list', request=request, format=format),
+        'datatypes': reverse('neurobank:datatype-list', request=request, format=format),
+        'domains': reverse('neurobank:domain-list', request=request, format=format)
+    })
 
 
 class ResourceFilter(filters.FilterSet):

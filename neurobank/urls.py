@@ -5,6 +5,7 @@ from django.conf.urls import url
 from neurobank import views
 
 urlpatterns = [
+    url(r'^$', views.api_root),
     url(r"^datatypes/$", views.DataTypeList.as_view(), name="datatype-list"),
     url(r"^datatypes/(?P<name>[\w-]+)/$", views.DataTypeDetail.as_view(),
         name='datatype'),
