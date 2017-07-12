@@ -19,9 +19,12 @@ class ResourceSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("sha1 value cannot be updated; create a new resource")
         if sha1_re.match(value) is None:
             raise serializers.ValidationError("invalid sha1 value")
+        return value
 
     def validate_name(self, value):
-        raise serializers.ValidationError("name is auto-assigned and cannot be set or updated")
+        if self.instance is not None and self.instance.name != value:
+            raise serializers.ValidationError("name cannot be updated")
+        return value
 
     class Meta:
         model = Resource

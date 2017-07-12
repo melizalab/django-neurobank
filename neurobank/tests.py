@@ -3,7 +3,7 @@
 import hashlib
 import uuid
 
-from django.core.urlresolvers import reverse
+from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -40,9 +40,19 @@ class ResourceTests(APITestCase):
                                             args=[response.data["name"]]))
         self.assertEqual(response2.status_code, status.HTTP_200_OK)
 
-    def test_cannot_create_resource_with_own_uuid(self):
+    def test_can_create_resource_with_own_uuid(self):
+        myuuid = str(uuid.uuid4())
         response = self.client.post(reverse('neurobank:resource-list'),
-                                    {"dtype": self.dtype.name, "name": str(uuid.uuid4())})
+                                    {"dtype": self.dtype.name, "name": myuuid})
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        response2 = self.client.get(reverse('neurobank:resource',
+                                            args=[myuuid]))
+        self.assertEqual(response2.status_code, status.HTTP_200_OK)
+
+    def test_cannot_create_resource_with_invalid_uuid(self):
+        myuuid = "blahblahblah"
+        response = self.client.post(reverse('neurobank:resource-list'),
+                                    {"dtype": self.dtype.name, "name": myuuid})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_can_access_resource_detail(self):
