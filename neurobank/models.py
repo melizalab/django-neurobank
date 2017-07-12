@@ -21,7 +21,10 @@ class Resource(models.Model):
     )
     dtype = models.ForeignKey("DataType", on_delete=models.PROTECT)
     locations = models.ManyToManyField("Domain", through="Location")
-    registered = models.DateTimeField(auto_now_add=True)
+    created_on = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey('auth.User',
+                              related_name='resources',
+                              on_delete=models.CASCADE)
     metadata = HStoreField(blank=True, null=True)
 
     def __str__(self):

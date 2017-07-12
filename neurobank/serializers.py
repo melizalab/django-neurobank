@@ -5,6 +5,7 @@ from __future__ import unicode_literals
 import re
 
 from rest_framework import serializers
+from django.contrib.auth.models import User
 from neurobank.models import Resource, DataType, Domain, Location
 
 sha1_re = re.compile(r"[0-9a-fA-F]{40}")
@@ -13,6 +14,7 @@ class ResourceSerializer(serializers.ModelSerializer):
     dtype = serializers.SlugRelatedField(queryset=DataType.objects.all(), slug_field='name')
     locations = serializers.SlugRelatedField(
                                              read_only=True, many=True, slug_field='name')
+    created_by = serializers.ReadOnlyField(source='created_by.username')
 
     def validate_sha1(self, value):
         if self.instance is not None and self.instance.sha1 != value:
@@ -28,8 +30,8 @@ class ResourceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Resource
-        fields = ('name', 'sha1', 'dtype', 'registered', 'metadata', 'locations')
-        read_only_fields = ('registered',)
+        fields = ('name', 'sha1', 'dtype','metadata', 'locations',
+                  'created_by', 'created_on')
 
 
 class DataTypeSerializer(serializers.ModelSerializer):

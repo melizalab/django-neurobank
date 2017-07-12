@@ -7,11 +7,30 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from django.contrib.auth.models import User
 from neurobank.models import Resource, DataType, Domain, Location
 
-class ResourceTests(APITestCase):
+
+class APIAuthTestCase(APITestCase):
+    username = "user"
+    password = "password1"
+
+    def login(self):
+        self.client.login(username=self.username, password=self.password)
+
+    def logout(self):
+        self.client.logout()
 
     def setUp(self):
+        self.user = User.objects.create_superuser(username=self.username,
+                                                  password=self.password,
+                                                  email="user@domain.com")
+
+
+class ResourceTests(APIAuthTestCase):
+
+    def setUp(self):
+        super(ResourceTests, self).setUp()
         self.dtype = DataType.objects.create(
             name="spike_times",
             content_type="application/vnd.meliza-org.pproc+json; version=1.0")
@@ -22,6 +41,7 @@ class ResourceTests(APITestCase):
         self.resource = Resource.objects.create(
             sha1=hashlib.sha1(b"").hexdigest(),
             dtype=self.dtype,
+            created_by=self.user,
             metadata={"experimenter": "dmeliza"})
         self.location = Location.objects.create(
             resource=self.resource,
@@ -33,6 +53,7 @@ class ResourceTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_can_create_resource(self):
+        self.client.login(username=self.username, password=self.password)
         response = self.client.post(reverse('neurobank:resource-list'),
                                     {"dtype": self.dtype.name,})
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -41,6 +62,7 @@ class ResourceTests(APITestCase):
         self.assertEqual(response2.status_code, status.HTTP_200_OK)
 
     def test_can_create_resource_with_own_uuid(self):
+        self.login()
         myuuid = str(uuid.uuid4())
         response = self.client.post(reverse('neurobank:resource-list'),
                                     {"dtype": self.dtype.name, "name": myuuid})
@@ -50,6 +72,7 @@ class ResourceTests(APITestCase):
         self.assertEqual(response2.status_code, status.HTTP_200_OK)
 
     def test_cannot_create_resource_with_invalid_uuid(self):
+        self.login()
         myuuid = "blahblahblah"
         response = self.client.post(reverse('neurobank:resource-list'),
                                     {"dtype": self.dtype.name, "name": myuuid})
@@ -62,6 +85,7 @@ class ResourceTests(APITestCase):
             "name": str(self.resource.name),
             "sha1": self.resource.sha1,
             "dtype": self.dtype.name,
+            "created_by": self.user.username,
             "metadata": self.resource.metadata,
             "locations": [self.domain.name]}, response.data)
 
@@ -70,29 +94,34 @@ class ResourceTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_cannot_delete_resource(self):
+        self.login()
         response = self.client.delete(reverse('neurobank:resource', args=[self.resource.name]))
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
     def test_cannot_modify_name(self):
+        self.login()
         response = self.client.patch(reverse('neurobank:resource', args=[self.resource.name]),
                                      {"name": str(uuid.uuid4())})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_cannot_modify_sha1(self):
+        self.login()
         response = self.client.patch(reverse('neurobank:resource', args=[self.resource.name]),
                                      {"sha1": hashlib.sha1(b"blah").hexdigest()})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_can_update_metadata(self):
+        self.login()
         response = self.client.patch(reverse('neurobank:resource', args=[self.resource.name]),
                                      {"metadata": {"test_field": "value"}}, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertDictContainsSubset({"test_field": "value"}, response.data["metadata"])
 
 
-class LocationTests(APITestCase):
+class LocationTests(APIAuthTestCase):
 
     def setUp(self):
+        super(LocationTests, self).setUp()
         self.dtype = DataType.objects.create(
             name="spike_times",
             content_type="application/vnd.meliza-org.pproc+json; version=1.0")
@@ -103,6 +132,7 @@ class LocationTests(APITestCase):
         self.resource = Resource.objects.create(
             sha1=hashlib.sha1(b"").hexdigest(),
             dtype=self.dtype,
+            created_by=self.user,
             metadata={"experimenter": "dmeliza"})
 
     def test_can_add_and_delete_location(self):
@@ -111,6 +141,7 @@ class LocationTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data, [])
 
+        self.login()
         response = self.client.post(url, {"domain_name": self.domain.name}, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
@@ -130,9 +161,10 @@ class LocationTests(APITestCase):
         self.assertEqual(response.data, [])
 
 
-class DataTypeTests(APITestCase):
+class DataTypeTests(APIAuthTestCase):
 
     def setUp(self):
+        super(DataTypeTests, self).setUp()
         self.dtype = DataType.objects.create(
             name="spike_times",
             content_type="application/vnd.meliza-org.pproc+json; version=1.0")
@@ -153,6 +185,7 @@ class DataTypeTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_can_create_datatype(self):
+        self.login()
         data = {"name": "acoustic_waveform",
                 "content_type": "audio/wav"}
         response = self.client.post(reverse("neurobank:datatype-list"), data)
@@ -164,18 +197,21 @@ class DataTypeTests(APITestCase):
         self.assertEqual(response2.data, data)
 
     def test_cannot_delete_datatype(self):
+        self.login()
         response = self.client.delete(reverse("neurobank:datatype", args=[self.dtype.name]))
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
     def test_cannot_modify_datatype(self):
+        self.login()
         response = self.client.patch(reverse("neurobank:datatype", args=[self.dtype.name]),
                                      {"name": "blahblahblah"})
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
-class DomainTests(APITestCase):
+class DomainTests(APIAuthTestCase):
 
     def setUp(self):
+        super(DomainTests, self).setUp()
         self.domain = Domain.objects.create(
             name="local",
             scheme="neurobank",
@@ -198,6 +234,7 @@ class DomainTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_can_create_domain(self):
+        self.login()
         data = {"name": "remote",
                 "scheme": "http",
                 "root": "/meliza.org/spike_times/"}
@@ -210,18 +247,21 @@ class DomainTests(APITestCase):
         self.assertEqual(response2.data, data)
 
     def test_cannot_delete_domain(self):
+        self.login()
         response = self.client.delete(reverse("neurobank:domain", args=[self.domain.name]))
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
     def test_can_modify_domain(self):
+        self.login()
         response = self.client.patch(reverse("neurobank:domain", args=[self.domain.name]),
                                      {"name": "local_intrac"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
-class ResourceFilterTests(APITestCase):
+class ResourceFilterTests(APIAuthTestCase):
 
     def setUp(self):
+        super(ResourceFilterTests, self).setUp()
         self.dtype1 = DataType.objects.create(
             name="spike_times",
             content_type="application/vnd.meliza-org.pproc+json; version=1.0")
@@ -239,6 +279,7 @@ class ResourceFilterTests(APITestCase):
         self.resource1 = Resource.objects.create(
             sha1=hashlib.sha1(b"").hexdigest(),
             dtype=self.dtype1,
+            created_by=self.user,
             metadata={"experimenter": "dmeliza"})
         Location.objects.create(
             resource=self.resource1,
@@ -248,6 +289,7 @@ class ResourceFilterTests(APITestCase):
             domain=self.domain_remote)
         self.resource2 = Resource.objects.create(
             dtype=self.dtype2,
+            created_by=self.user,
             metadata={"experimenter": "mcb2x"})
         Location.objects.create(
             resource=self.resource2,
@@ -267,6 +309,12 @@ class ResourceFilterTests(APITestCase):
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["name"], str(self.resource1.name))
 
+    def test_can_filter_by_user(self):
+        response = self.client.get(reverse('neurobank:resource-list'),
+                                   {"created_by": self.user.username})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+
     def test_can_filter_by_location(self):
         response = self.client.get(reverse('neurobank:resource-list'),
                                    {"location": self.domain_local.name})
@@ -279,7 +327,6 @@ class ResourceFilterTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
 
-
     def test_can_filter_by_metadata(self):
         response = self.client.get(reverse('neurobank:resource-list'),
                                    {"metadata__experimenter": "mcb2x"})
@@ -288,9 +335,10 @@ class ResourceFilterTests(APITestCase):
         self.assertEqual(response.data[0]["name"], str(self.resource2.name))
 
 
-class LocationFilterTests(APITestCase):
+class LocationFilterTests(APIAuthTestCase):
 
     def setUp(self):
+        super(LocationFilterTests, self).setUp()
         self.dtype = DataType.objects.create(
             name="spike_times",
             content_type="application/vnd.meliza-org.pproc+json; version=1.0")
@@ -305,6 +353,7 @@ class LocationFilterTests(APITestCase):
         self.resource = Resource.objects.create(
             sha1=hashlib.sha1(b"").hexdigest(),
             dtype=self.dtype,
+            created_by=self.user,
             metadata={"experimenter": "dmeliza"})
         Location.objects.create(
             resource=self.resource,
