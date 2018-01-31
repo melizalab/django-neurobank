@@ -3,9 +3,9 @@
 
 This is a Django application that provides name resolution services to [neurobank](https://github.com/melizalab/neurobank)* using an HTTP API.
 
-The data management strategy behind **neurobank** is simple: every resource gets a unique identifier. As long as you use the correct identifier, you can unambiguously locate the resource. Resources include *sources*, which are used to control an experiment, and *data*, which result from running the experiment.
+The data management strategy behind **neurobank** is simple: every resource gets a unique identifier. As long as you use the correct identifier, you can unambiguously locate the resource. Resources include *sources*, which are used to control an experiment, and *data*, which result from running the experiment. Identifiers can be pretty much anything that's encodable in a URL and isn't too long. You can use manually-assigned identifiers like `st32_1_2_1` or let the API generate short, memorable codes like `Heengei8`
 
-To use this strategy, you need to be able to do two things: register each resource you create somewhere, and then resolve resource names to locations so that you can access your data. Being able to attach searchable metadata to your resources is pretty handy, too. This software provides a backend for these tasks. You'll also need [neurobank](https://github.com/melizalab/neurobank)* or some other client software to take care of actually handling your files.
+To use this strategy, you need to be able to do two things: register each resource you create somewhere, and then resolve resource names to locations so that you can access your data. Being able to attach searchable metadata to your resources is pretty handy, too. This software provides a backend for these tasks. You'll also need [neurobank](https://github.com/melizalab/neurobank) or some other client software to take care of storing your files.
 
 This software is licensed for you to use under the Gnu Public License, version 3. See COPYING for details
 

@@ -61,6 +61,7 @@ class ResourceList(generics.ListCreateAPIView):
 
 
 class ResourceDetail(generics.RetrieveUpdateAPIView):
+    lookup_field = "name"
     queryset = models.Resource.objects.all()
     serializer_class = serializers.ResourceSerializer
     permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
@@ -101,7 +102,7 @@ class LocationList(generics.ListAPIView):
     filter_class = LocationFilter
 
     def get_object(self):
-        return get_object_or_404(models.Resource, pk=self.kwargs["resource_pk"])
+        return get_object_or_404(models.Resource, name=self.kwargs["resource_name"])
 
     def get_queryset(self):
         resource = self.get_object()
@@ -109,7 +110,7 @@ class LocationList(generics.ListAPIView):
 
     def post(self, request, *args, **kwargs):
         data = {"domain_name": request.data["domain_name"],
-                "resource_name": kwargs["resource_pk"]}
+                "resource_name": kwargs["resource_name"]}
         serializer = serializers.LocationSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
@@ -124,6 +125,6 @@ class LocationDetail(generics.RetrieveDestroyAPIView):
 
     def get_object(self):
         return get_object_or_404(models.Location,
-                                 resource=self.kwargs["resource_pk"],
+                                 resource__name=self.kwargs["resource_name"],
                                  domain__name=self.kwargs["domain_pk"]
         )

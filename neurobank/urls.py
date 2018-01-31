@@ -13,10 +13,10 @@ urlpatterns = [
     url(r"^domains/(?P<name>[\w-]+)/$", views.DomainDetail.as_view(),
         name='domain'),
     url(r"^resources/$", views.ResourceList.as_view(), name="resource-list"),
-    url(r"^resources/(?P<pk>[a-f0-9\-]{36})/$", views.ResourceDetail.as_view(),
+    url(r"^resources/(?P<name>[\w-]+)/$", views.ResourceDetail.as_view(),
         name='resource'),
-    url(r"^resources/(?P<resource_pk>[a-f0-9\-]{36})/locations/$",
+    url(r"^resources/(?P<resource_name>[\w-]+)/locations/$",
         views.LocationList.as_view(), name="location-list"),
-    url(r"^resources/(?P<resource_pk>[a-f0-9\-]{36})/locations/(?P<domain_pk>[\w-]+)/$",
+    url(r"^resources/(?P<resource_name>[\w-]+)/locations/(?P<domain_pk>[\w-]+)/$",
         views.LocationDetail.as_view(), name="location")
 ]

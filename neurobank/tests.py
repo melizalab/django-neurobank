@@ -33,7 +33,7 @@ class ResourceTests(APIAuthTestCase):
         super(ResourceTests, self).setUp()
         self.dtype = DataType.objects.create(
             name="spike_times",
-            content_type="application/vnd.meliza-org.pproc+json; version=1.0")
+            content_type="application/vnd.meliza-org.pprox+json; version=1.0")
         self.domain = Domain.objects.create(
             name="local",
             scheme="neurobank",
@@ -61,7 +61,7 @@ class ResourceTests(APIAuthTestCase):
                                             args=[response.data["name"]]))
         self.assertEqual(response2.status_code, status.HTTP_200_OK)
 
-    def test_can_create_resource_with_own_uuid(self):
+    def test_can_create_resource_with_own_name(self):
         self.login()
         myuuid = str(uuid.uuid4())
         response = self.client.post(reverse('neurobank:resource-list'),
@@ -71,11 +71,11 @@ class ResourceTests(APIAuthTestCase):
                                             args=[myuuid]))
         self.assertEqual(response2.status_code, status.HTTP_200_OK)
 
-    def test_cannot_create_resource_with_invalid_uuid(self):
+    def test_cannot_create_resource_with_invalid_name(self):
         self.login()
-        myuuid = "blahblahblah"
+        bad_name = "blah/blah"
         response = self.client.post(reverse('neurobank:resource-list'),
-                                    {"dtype": self.dtype.name, "name": myuuid})
+                                    {"dtype": self.dtype.name, "name": bad_name})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_can_access_resource_detail(self):
@@ -130,6 +130,7 @@ class LocationTests(APIAuthTestCase):
             scheme="neurobank",
             root="/home/data/intracellular")
         self.resource = Resource.objects.create(
+            name="a_boring_file",
             sha1=hashlib.sha1(b"").hexdigest(),
             dtype=self.dtype,
             created_by=self.user,

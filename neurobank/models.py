@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 # -*- mode: python -*-
 from __future__ import unicode_literals
-
-import uuid
 import posixpath as pp
 
 from django.contrib.postgres.fields import HStoreField
@@ -10,10 +8,13 @@ from django.utils.encoding import python_2_unicode_compatible
 from django.urls import reverse
 from django.db import models
 
+from neurobank.tools import random_id
+
 @python_2_unicode_compatible
 class Resource(models.Model):
     """A resource has a unique identifier, a defined type, and some optional metadata"""
-    name = models.UUIDField(primary_key=True, default=uuid.uuid4, unique=True)
+    id = models.AutoField(primary_key=True)
+    name = models.SlugField(max_length=64, default=random_id, unique=True)
     sha1 = models.CharField(
         max_length=40, unique=True,
         blank=True, null=True,
@@ -26,6 +27,17 @@ class Resource(models.Model):
                               related_name='resources',
                               on_delete=models.CASCADE)
     metadata = HStoreField(blank=True, null=True)
+
+    # def save(self, *args, **kwargs):
+    #     # generate random name if none is supplied
+    #     if self.name is not None:
+    #         super(Resource, self).save(*args, **kwargs)
+    #     else:
+    #         randi = random.randint(0, base62.maximum)
+    #         self.name = base62(randi)
+    #         # this could generate an integrity error
+    #         super(Book, self).save(*args, **kwargs)
+
 
     def __str__(self):
         return str(self.name)
