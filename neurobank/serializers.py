@@ -5,10 +5,16 @@ from __future__ import unicode_literals
 import re
 
 from rest_framework import serializers
+from rest_framework.validators import UniqueValidator
 from django.contrib.auth.models import User
 from neurobank.models import Resource, DataType, Domain, Location
 
 sha1_re = re.compile(r"[0-9a-fA-F]{40}")
+
+class SlugField(serializers.SlugField):
+    default_error_messages = {"invalid":
+                              "can only contain letters, numbers, underscores, and hyphens"}
+
 
 class ResourceSerializer(serializers.ModelSerializer):
     dtype = serializers.SlugRelatedField(queryset=DataType.objects.all(), slug_field='name')
@@ -35,12 +41,20 @@ class ResourceSerializer(serializers.ModelSerializer):
 
 
 class DataTypeSerializer(serializers.ModelSerializer):
+
+    name = SlugField(validators=[UniqueValidator(queryset=DataType.objects.all(),
+                                                 message="datatype with this name already exists")])
+
     class Meta:
         model = DataType
         fields = ('name', 'content_type')
 
 
 class DomainSerializer(serializers.ModelSerializer):
+
+    name = SlugField(validators=[UniqueValidator(queryset=Domain.objects.all(),
+                                                 message="domain with this name already exists")])
+
     class Meta:
         model = Domain
         fields = ('name', 'scheme', 'root')

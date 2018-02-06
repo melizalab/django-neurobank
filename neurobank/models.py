@@ -28,17 +28,6 @@ class Resource(models.Model):
                               on_delete=models.CASCADE)
     metadata = HStoreField(blank=True, null=True)
 
-    # def save(self, *args, **kwargs):
-    #     # generate random name if none is supplied
-    #     if self.name is not None:
-    #         super(Resource, self).save(*args, **kwargs)
-    #     else:
-    #         randi = random.randint(0, base62.maximum)
-    #         self.name = base62(randi)
-    #         # this could generate an integrity error
-    #         super(Book, self).save(*args, **kwargs)
-
-
     def __str__(self):
         return str(self.name)
 

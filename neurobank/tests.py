@@ -247,6 +247,22 @@ class DomainTests(APIAuthTestCase):
         self.assertEqual(response2.status_code, status.HTTP_200_OK)
         self.assertEqual(response2.data, data)
 
+    def test_cannot_create_duplicate_domain(self):
+        self.login()
+        data = {"name": self.domain.name,
+                "scheme": "http",
+                "root": "/meliza.org/spike_times/"}
+        response = self.client.post(reverse("neurobank:domain-list"), data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cannot_create_badly_named_domain(self):
+        self.login()
+        data = {"name": "blargh!!@!#",
+                "scheme": "http",
+                "root": "/meliza.org/spike_times/"}
+        response = self.client.post(reverse("neurobank:domain-list"), data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_cannot_delete_domain(self):
         self.login()
         response = self.client.delete(reverse("neurobank:domain", args=[self.domain.name]))
