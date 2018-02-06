@@ -275,6 +275,33 @@ class DomainTests(APIAuthTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
+class DomainFilterTests(APIAuthTestCase):
+
+    def setUp(self):
+        super(DomainFilterTests, self).setUp()
+        self.domain_1 = Domain.objects.create(
+            name="intracellular",
+            scheme="neurobank",
+            root="/home/data/intracellular")
+        self.domain_2 = Domain.objects.create(
+            name="extracellular",
+            scheme="http",
+            root="/meliza.org/data/extracellular")
+
+    def test_can_filter_by_scheme(self):
+        url = reverse('neurobank:domain-list')
+        response = self.client.get(url, {"scheme": self.domain_1.scheme })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+
+    def test_can_filter_by_root(self):
+        url = reverse('neurobank:domain-list')
+        response = self.client.get(url, {"root": self.domain_1.root })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+
+
+
 class ResourceFilterTests(APIAuthTestCase):
 
     def setUp(self):

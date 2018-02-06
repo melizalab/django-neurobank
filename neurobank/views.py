@@ -20,6 +20,16 @@ def api_root(request, format=None):
     })
 
 
+class DomainFilter(filters.FilterSet):
+    name = filters.CharFilter(name="name", lookup_expr="istartswith")
+    scheme = filters.CharFilter(name="scheme", lookup_expr="istartswith")
+    root = filters.CharFilter(name="root", lookup_expr="iexact")
+    class Meta:
+        model = models.Domain
+        fields = ["name", "scheme", "root"]
+
+
+
 class ResourceFilter(filters.FilterSet):
     name = filters.CharFilter(name="name", lookup_expr="istartswith")
     sha1 = filters.CharFilter(name="sha1", lookup_expr="istartswith")
@@ -72,6 +82,8 @@ class DomainList(generics.ListCreateAPIView):
     queryset = models.Domain.objects.all()
     serializer_class = serializers.DomainSerializer
     permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
+    filter_backends = (filters.DjangoFilterBackend,)
+    filter_class = DomainFilter
 
 
 class DomainDetail(generics.RetrieveUpdateAPIView):

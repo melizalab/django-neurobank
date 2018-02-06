@@ -43,7 +43,7 @@ class ResourceSerializer(serializers.ModelSerializer):
 class DataTypeSerializer(serializers.ModelSerializer):
 
     name = SlugField(validators=[UniqueValidator(queryset=DataType.objects.all(),
-                                                 message="datatype with this name already exists")])
+                                                 message="datatype already exists")])
 
     class Meta:
         model = DataType
@@ -53,7 +53,7 @@ class DataTypeSerializer(serializers.ModelSerializer):
 class DomainSerializer(serializers.ModelSerializer):
 
     name = SlugField(validators=[UniqueValidator(queryset=Domain.objects.all(),
-                                                 message="domain with this name already exists")])
+                                                 message="domain already exists")])
 
     class Meta:
         model = Domain
