@@ -53,7 +53,7 @@ class ResourceTests(APIAuthTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_can_create_resource(self):
-        self.client.login(username=self.username, password=self.password)
+        self.login()
         response = self.client.post(reverse('neurobank:resource-list'),
                                     {"dtype": self.dtype.name,})
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
@@ -76,6 +76,22 @@ class ResourceTests(APIAuthTestCase):
         bad_name = "blah/blah"
         response = self.client.post(reverse('neurobank:resource-list'),
                                     {"dtype": self.dtype.name, "name": bad_name})
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_can_create_resource_with_location(self):
+        self.login()
+        response = self.client.post(reverse('neurobank:resource-list'),
+                                    {"dtype": self.dtype.name, "locations": [self.domain.name]},
+                                    format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertDictContainsSubset({
+            "locations": [self.domain.name]}, response.data)
+
+    def test_cannot_create_resource_with_invalid_location(self):
+        self.login()
+        response = self.client.post(reverse('neurobank:resource-list'),
+                                    {"dtype": self.dtype.name, "locations": ["bad-location"]},
+                                    format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_can_access_resource_detail(self):
@@ -299,7 +315,6 @@ class DomainFilterTests(APIAuthTestCase):
         response = self.client.get(url, {"root": self.domain_1.root })
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
-
 
 
 class ResourceFilterTests(APIAuthTestCase):

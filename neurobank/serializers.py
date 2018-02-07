@@ -18,8 +18,8 @@ class SlugField(serializers.SlugField):
 
 class ResourceSerializer(serializers.ModelSerializer):
     dtype = serializers.SlugRelatedField(queryset=DataType.objects.all(), slug_field='name')
-    locations = serializers.SlugRelatedField(
-                                             read_only=True, many=True, slug_field='name')
+    locations = serializers.SlugRelatedField(queryset=Domain.objects.all(), required=False,
+                                             many=True, slug_field='name')
     created_by = serializers.ReadOnlyField(source='created_by.username')
 
     def validate_sha1(self, value):
@@ -39,9 +39,15 @@ class ResourceSerializer(serializers.ModelSerializer):
         fields = ('name', 'sha1', 'dtype','metadata', 'locations',
                   'created_by', 'created_on')
 
+    def create(self, validated_data):
+        domains = validated_data.pop('locations', [])
+        resource = Resource.objects.create(**validated_data)
+        for domain in domains:
+            Location.objects.create(resource=resource, domain=domain)
+        return resource
+
 
 class DataTypeSerializer(serializers.ModelSerializer):
-
     name = SlugField(validators=[UniqueValidator(queryset=DataType.objects.all(),
                                                  message="datatype already exists")])
 
@@ -51,7 +57,6 @@ class DataTypeSerializer(serializers.ModelSerializer):
 
 
 class DomainSerializer(serializers.ModelSerializer):
-
     name = SlugField(validators=[UniqueValidator(queryset=Domain.objects.all(),
                                                  message="domain already exists")])
 

@@ -29,7 +29,6 @@ class DomainFilter(filters.FilterSet):
         fields = ["name", "scheme", "root"]
 
 
-
 class ResourceFilter(filters.FilterSet):
     name = filters.CharFilter(name="name", lookup_expr="istartswith")
     sha1 = filters.CharFilter(name="sha1", lookup_expr="istartswith")
