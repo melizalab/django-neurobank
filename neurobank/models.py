@@ -52,6 +52,9 @@ class Domain(models.Model):
     def __str__(self):
         return self.name
 
+    class Meta:
+        unique_together = ("scheme", "root")
+
 
 @python_2_unicode_compatible
 class Location(models.Model):
