@@ -17,9 +17,19 @@ class SlugField(serializers.SlugField):
 
 
 class ResourceSerializer(serializers.ModelSerializer):
-    dtype = serializers.SlugRelatedField(queryset=DataType.objects.all(), slug_field='name')
-    locations = serializers.SlugRelatedField(queryset=Domain.objects.all(), required=False,
-                                             many=True, slug_field='name')
+    name = SlugField(validators=[UniqueValidator(queryset=Resource.objects.all(),
+                                                 message="a resource with this name already exists")])
+    dtype = serializers.SlugRelatedField(
+        queryset=DataType.objects.all(), slug_field='name',
+        error_messages={
+            'does_not_exist': 'dtype with name {value} does not exist.',
+            'invalid': 'invalid dtype'})
+    locations = serializers.SlugRelatedField(
+        queryset=Domain.objects.all(), required=False,
+        many=True, slug_field='name',
+        error_messages={
+            'does_not_exist': 'domain with name {value} does not exist.',
+            'invalid': 'invalid domain'})
     created_by = serializers.ReadOnlyField(source='created_by.username')
 
     def validate_sha1(self, value):
@@ -49,7 +59,7 @@ class ResourceSerializer(serializers.ModelSerializer):
 
 class DataTypeSerializer(serializers.ModelSerializer):
     name = SlugField(validators=[UniqueValidator(queryset=DataType.objects.all(),
-                                                 message="datatype already exists")])
+                                                 message="a dtype with this name already exists")])
 
     class Meta:
         model = DataType
@@ -58,7 +68,7 @@ class DataTypeSerializer(serializers.ModelSerializer):
 
 class DomainSerializer(serializers.ModelSerializer):
     name = SlugField(validators=[UniqueValidator(queryset=Domain.objects.all(),
-                                                 message="domain already exists")])
+                                                 message="a domain with this name already exists")])
 
     class Meta:
         model = Domain
