@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 # -*- mode: python -*-
 from __future__ import unicode_literals
-import posixpath as pp
 
 from django.contrib.postgres.fields import HStoreField
 from django.utils.encoding import python_2_unicode_compatible
-from django.urls import reverse
 from django.db import models
 
 from neurobank.tools import random_id

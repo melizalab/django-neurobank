@@ -17,7 +17,8 @@ class SlugField(serializers.SlugField):
 
 
 class ResourceSerializer(serializers.ModelSerializer):
-    name = SlugField(validators=[UniqueValidator(queryset=Resource.objects.all(),
+    name = SlugField(required=False,
+                     validators=[UniqueValidator(queryset=Resource.objects.all(),
                                                  message="a resource with this name already exists")])
     dtype = serializers.SlugRelatedField(
         queryset=DataType.objects.all(), slug_field='name',

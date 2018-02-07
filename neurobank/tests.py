@@ -354,7 +354,7 @@ class ResourceFilterTests(APIAuthTestCase):
             resource=self.resource2,
             domain=self.domain_local)
 
-    def test_can_filter_by_uuid(self):
+    def test_can_filter_by_name(self):
         response = self.client.get(reverse('neurobank:resource-list'),
                                    {"name": str(self.resource1.name)[:6]})
         self.assertEqual(response.status_code, status.HTTP_200_OK)

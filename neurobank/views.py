@@ -30,8 +30,8 @@ class DomainFilter(filters.FilterSet):
 
 
 class ResourceFilter(filters.FilterSet):
-    name = filters.CharFilter(name="name", lookup_expr="istartswith")
-    sha1 = filters.CharFilter(name="sha1", lookup_expr="istartswith")
+    name = filters.CharFilter(name="name", lookup_expr="icontains")
+    sha1 = filters.CharFilter(name="sha1", lookup_expr="icontains")
     dtype = filters.CharFilter(name="dtype__name", lookup_expr="icontains")
     location = filters.CharFilter(name="locations__name", lookup_expr="icontains")
     created_by = filters.CharFilter(name="created_by__username", lookup_expr="icontains")
