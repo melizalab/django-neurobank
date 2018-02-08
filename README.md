@@ -41,5 +41,4 @@ url(r'^neurobank/', include(neurobank.urls')),
 
 - Deleting is not supported in the HTTP API; the whole idea is that resources don't go away. But you can edit the locations and metadata.
 
-This application is still under development, and you should probably only allow access from trusted networks. Authentication is required to modify or add resources, domains, or data types. Authentication uses the django user app, and credentials are sent in plain text, so deploy as a reverse proxy behind an encrpyting
-https-enabled web server like nginx.
+This application is still under development, and you should probably only allow access from trusted networks. Authentication is required to modify or add resources, domains, or data types. Authentication uses the django user app, and credentials are sent in plain text, so deploy as a reverse proxy behind an encrpyting https-enabled web server like nginx.
