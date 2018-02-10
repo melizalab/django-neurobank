@@ -78,6 +78,20 @@ class ResourceTests(APIAuthTestCase):
                                     {"dtype": self.dtype.name, "name": bad_name})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_can_create_resource_with_metadata(self):
+        self.login()
+        myuuid = str(uuid.uuid4())
+        mdata = {"blah": "1234"}
+        response = self.client.post(reverse('neurobank:resource-list'),
+                                    {"dtype": self.dtype.name, "name": myuuid, "metadata": mdata},
+                                    format="json")
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        response2 = self.client.get(reverse('neurobank:resource',
+                                            args=[myuuid]))
+        self.assertEqual(response2.status_code, status.HTTP_200_OK)
+        self.assertDictEqual(response2.data["metadata"], mdata)
+
+
     def test_can_create_resource_with_location(self):
         self.login()
         response = self.client.post(reverse('neurobank:resource-list'),

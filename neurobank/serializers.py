@@ -6,7 +6,6 @@ import re
 
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
-from django.contrib.auth.models import User
 from neurobank.models import Resource, DataType, Domain, Location
 
 sha1_re = re.compile(r"[0-9a-fA-F]{40}")
@@ -36,7 +35,7 @@ class ResourceSerializer(serializers.ModelSerializer):
     def validate_sha1(self, value):
         if self.instance is not None and self.instance.sha1 != value:
             raise serializers.ValidationError("sha1 value cannot be updated; create a new resource")
-        if sha1_re.match(value) is None:
+        if value is not None and sha1_re.match(value) is None:
             raise serializers.ValidationError("invalid sha1 value")
         return value
 
