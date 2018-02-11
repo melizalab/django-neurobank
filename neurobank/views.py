@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # -*- mode: python -*-
-from django.shortcuts import render, get_object_or_404
-from rest_framework import generics, mixins, status, permissions
+from django.shortcuts import get_object_or_404
+from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from rest_framework.reverse import reverse
@@ -18,6 +18,11 @@ def api_root(request, format=None):
         'datatypes': reverse('neurobank:datatype-list', request=request, format=format),
         'domains': reverse('neurobank:domain-list', request=request, format=format)
     })
+
+
+@api_view(['GET'])
+def notfound(request, format=None):
+    return Response({'detail': 'not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
 class DomainFilter(filters.FilterSet):

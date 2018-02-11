@@ -2,6 +2,7 @@
 # -*- mode: python -*-
 import hashlib
 import uuid
+import posixpath as ppath
 
 from django.urls import reverse
 from rest_framework import status
@@ -47,7 +48,6 @@ class ResourceTests(APIAuthTestCase):
             resource=self.resource,
             domain=self.domain)
 
-
     def test_can_access_resource_list(self):
         response = self.client.get(reverse('neurobank:resource-list'))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -91,7 +91,6 @@ class ResourceTests(APIAuthTestCase):
         self.assertEqual(response2.status_code, status.HTTP_200_OK)
         self.assertDictEqual(response2.data["metadata"], mdata)
 
-
     def test_can_create_resource_with_location(self):
         self.login()
         response = self.client.post(reverse('neurobank:resource-list'),
@@ -121,6 +120,11 @@ class ResourceTests(APIAuthTestCase):
 
     def test_cannot_access_nonexistent_resource_detail(self):
         response = self.client.get(reverse('neurobank:resource', args=[uuid.uuid4()]))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_cannot_access_invalid_resource_detail(self):
+        url = ppath.join(reverse('neurobank:resource-list'), "not.a.slug") + "/"
+        response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_cannot_delete_resource(self):

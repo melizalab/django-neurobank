@@ -18,5 +18,7 @@ urlpatterns = [
     url(r"^resources/(?P<resource_name>[\w-]+)/locations/$",
         views.LocationList.as_view(), name="location-list"),
     url(r"^resources/(?P<resource_name>[\w-]+)/locations/(?P<domain_pk>[\w-]+)/$",
-        views.LocationDetail.as_view(), name="location")
+        views.LocationDetail.as_view(), name="location"),
+    # fallthrough to 404
+    url(r"^.*$", views.notfound, name='notfound')
 ]
