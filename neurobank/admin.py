@@ -11,6 +11,8 @@ class DataTypeAdmin(admin.ModelAdmin):
 
 class DomainAdmin(admin.ModelAdmin):
     list_display = ('name', 'scheme', 'root')
+    list_filter = ('name', 'scheme')
+    search_fields = ('name__istartswith', 'scheme__istartswith', 'root__icontains')
 
 
 class ResourceAdmin(admin.ModelAdmin):
