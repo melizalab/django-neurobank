@@ -62,7 +62,7 @@ class ResourceList(generics.ListCreateAPIView):
     serializer_class = serializers.ResourceSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filter_class = ResourceFilter
-    permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
+    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
 
     def filter_queryset(self, queryset):
         qs = super(ResourceList, self).filter_queryset(queryset)
@@ -78,14 +78,14 @@ class ResourceDetail(generics.RetrieveUpdateAPIView):
     lookup_field = "name"
     queryset = models.Resource.objects.all()
     serializer_class = serializers.ResourceSerializer
-    permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
+    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
 
 
 class DomainList(generics.ListCreateAPIView):
     lookup_field = "name"
     queryset = models.Domain.objects.all()
     serializer_class = serializers.DomainSerializer
-    permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
+    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
     filter_backends = (filters.DjangoFilterBackend,)
     filter_class = DomainFilter
 
@@ -94,28 +94,30 @@ class DomainDetail(generics.RetrieveUpdateAPIView):
     lookup_field = "name"
     queryset = models.Domain.objects.all()
     serializer_class = serializers.DomainSerializer
-    permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
+    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
 
 
 class DataTypeList(generics.ListCreateAPIView):
     lookup_field = "name"
     queryset = models.DataType.objects.all()
     serializer_class = serializers.DataTypeSerializer
-    permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
+    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
 
 
 class DataTypeDetail(generics.RetrieveAPIView):
     lookup_field = "name"
     queryset = models.DataType.objects.all()
     serializer_class = serializers.DataTypeSerializer
-    permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
+    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
 
 
 class LocationList(generics.ListAPIView):
     """List locations for a specific resource """
+    queryset = models.Location.objects.all()
     serializer_class = serializers.LocationSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filter_class = LocationFilter
+    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
 
     def get_object(self):
         return get_object_or_404(models.Resource, name=self.kwargs["resource_name"])
@@ -136,8 +138,9 @@ class LocationList(generics.ListAPIView):
 
 
 class LocationDetail(generics.RetrieveDestroyAPIView):
+    queryset = models.Location.objects.all()
     serializer_class = serializers.LocationSerializer
-    permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
+    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
 
     def get_object(self):
         return get_object_or_404(models.Location,
