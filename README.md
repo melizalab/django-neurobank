@@ -37,8 +37,8 @@ url(r'^neurobank/', include(neurobank.urls')),
 
 ### Using the registry
 
-- List the endpoints and verbs
+Documentation is still in progress. We need a list of endpoints and supported verbs. However, the interface can be accessed through a browser.
 
-- Deleting is not supported in the HTTP API; the whole idea is that resources don't go away. But you can edit the locations and metadata.
+Deleting is not supported in the HTTP API. A fundamental concept behind a registry is that resources have unique identifiers, which are never re-used or changed. You can edit locations, metadata, and other attributes using PUT. If you desperately need to change a name or delete an identifier, you'll have to use the Django database admin or directly access the backing database.
 
-This application is still under development, and you should probably only allow access from trusted networks. Authentication is required to modify or add resources, domains, or data types. Authentication uses the django user app, and credentials are sent in plain text, so deploy as a reverse proxy behind an encrpyting https-enabled web server like nginx.
+This application is still under development, and you should probably only allow access from trusted networks. Authentication is required to modify or add resources, domains, or data types. Authentication uses the django user app, and credentials are sent in plain text. Your site should only be deployed as a reverse proxy behind an encrpyting https-enabled web server like nginx.
