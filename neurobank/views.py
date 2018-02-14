@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from rest_framework.reverse import reverse
 from django_filters import rest_framework as filters
+from drf_link_header_pagination import LinkHeaderPagination
 
 from neurobank import models
 from neurobank import serializers
@@ -63,12 +64,13 @@ class ResourceList(generics.ListCreateAPIView):
     filter_backends = (filters.DjangoFilterBackend,)
     filter_class = ResourceFilter
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
+    pagination_class = LinkHeaderPagination
 
     def filter_queryset(self, queryset):
         qs = super(ResourceList, self).filter_queryset(queryset)
         # this could be a little dangerous b/c we're letting the user design queries
         mq = {k: v for k,v in self.request.GET.items() if k.startswith("metadata__")}
-        return qs.filter(**mq)
+        return qs.filter(**mq).order_by("name")
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
