@@ -17,7 +17,7 @@ def api_root(request, format=None):
     return Response({
         'resources': reverse('neurobank:resource-list', request=request, format=format),
         'datatypes': reverse('neurobank:datatype-list', request=request, format=format),
-        'domains': reverse('neurobank:domain-list', request=request, format=format)
+        'archives': reverse('neurobank:archive-list', request=request, format=format)
     })
 
 
@@ -26,12 +26,12 @@ def notfound(request, format=None):
     return Response({'detail': 'not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
-class DomainFilter(filters.FilterSet):
+class ArchiveFilter(filters.FilterSet):
     name = filters.CharFilter(name="name", lookup_expr="istartswith")
     scheme = filters.CharFilter(name="scheme", lookup_expr="istartswith")
     root = filters.CharFilter(name="root", lookup_expr="iexact")
     class Meta:
-        model = models.Domain
+        model = models.Archive
         fields = ["name", "scheme", "root"]
 
 
@@ -51,8 +51,8 @@ class ResourceFilter(filters.FilterSet):
 
 
 class LocationFilter(filters.FilterSet):
-    name = filters.CharFilter(name="domain__name", lookup_expr = "icontains")
-    scheme = filters.CharFilter(name="domain__scheme", lookup_expr = "istartswith")
+    name = filters.CharFilter(name="archive__name", lookup_expr = "icontains")
+    scheme = filters.CharFilter(name="archive__scheme", lookup_expr = "istartswith")
     class Meta:
         model = models.Location
         fields = ["name", "scheme"]
@@ -83,19 +83,19 @@ class ResourceDetail(generics.RetrieveUpdateAPIView):
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
 
 
-class DomainList(generics.ListCreateAPIView):
+class ArchiveList(generics.ListCreateAPIView):
     lookup_field = "name"
-    queryset = models.Domain.objects.all()
-    serializer_class = serializers.DomainSerializer
+    queryset = models.Archive.objects.all()
+    serializer_class = serializers.ArchiveSerializer
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
     filter_backends = (filters.DjangoFilterBackend,)
-    filter_class = DomainFilter
+    filter_class = ArchiveFilter
 
 
-class DomainDetail(generics.RetrieveUpdateAPIView):
+class ArchiveDetail(generics.RetrieveUpdateAPIView):
     lookup_field = "name"
-    queryset = models.Domain.objects.all()
-    serializer_class = serializers.DomainSerializer
+    queryset = models.Archive.objects.all()
+    serializer_class = serializers.ArchiveSerializer
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
 
 
@@ -129,7 +129,7 @@ class LocationList(generics.ListAPIView):
         return resource.location_set.all()
 
     def post(self, request, *args, **kwargs):
-        data = {"domain_name": request.data["domain_name"],
+        data = {"archive_name": request.data["archive_name"],
                 "resource_name": kwargs["resource_name"]}
         serializer = serializers.LocationSerializer(data=data)
         if serializer.is_valid():
@@ -147,5 +147,5 @@ class LocationDetail(generics.RetrieveDestroyAPIView):
     def get_object(self):
         return get_object_or_404(models.Location,
                                  resource__name=self.kwargs["resource_name"],
-                                 domain__name=self.kwargs["domain_pk"]
+                                 archive__name=self.kwargs["archive_pk"]
         )

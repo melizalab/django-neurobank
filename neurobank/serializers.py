@@ -6,7 +6,7 @@ import re
 
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
-from neurobank.models import Resource, DataType, Domain, Location
+from neurobank.models import Resource, DataType, Archive, Location
 
 sha1_re = re.compile(r"[0-9a-fA-F]{40}")
 
@@ -25,11 +25,11 @@ class ResourceSerializer(serializers.ModelSerializer):
             'does_not_exist': 'dtype with name {value} does not exist.',
             'invalid': 'invalid dtype'})
     locations = serializers.SlugRelatedField(
-        queryset=Domain.objects.all(), required=False,
+        queryset=Archive.objects.all(), required=False,
         many=True, slug_field='name',
         error_messages={
-            'does_not_exist': 'domain with name {value} does not exist.',
-            'invalid': 'invalid domain'})
+            'does_not_exist': 'archive with name {value} does not exist.',
+            'invalid': 'invalid archive'})
     created_by = serializers.ReadOnlyField(source='created_by.username')
 
     def validate_sha1(self, value):
@@ -50,10 +50,10 @@ class ResourceSerializer(serializers.ModelSerializer):
                   'created_by', 'created_on')
 
     def create(self, validated_data):
-        domains = validated_data.pop('locations', [])
+        archives = validated_data.pop('locations', [])
         resource = Resource.objects.create(**validated_data)
-        for domain in domains:
-            Location.objects.create(resource=resource, domain=domain)
+        for archive in archives:
+            Location.objects.create(resource=resource, archive=archive)
         return resource
 
 
@@ -66,23 +66,23 @@ class DataTypeSerializer(serializers.ModelSerializer):
         fields = ('name', 'content_type')
 
 
-class DomainSerializer(serializers.ModelSerializer):
-    name = SlugField(validators=[UniqueValidator(queryset=Domain.objects.all(),
-                                                 message="a domain with this name already exists")])
+class ArchiveSerializer(serializers.ModelSerializer):
+    name = SlugField(validators=[UniqueValidator(queryset=Archive.objects.all(),
+                                                 message="an archive with this name already exists")])
 
     class Meta:
-        model = Domain
+        model = Archive
         fields = ('name', 'scheme', 'root')
 
 
 class LocationSerializer(serializers.ModelSerializer):
-    domain_name = serializers.SlugRelatedField(source="domain",
-                                               queryset=Domain.objects.all(), slug_field="name")
+    archive_name = serializers.SlugRelatedField(source="archive",
+                                               queryset=Archive.objects.all(), slug_field="name")
     resource_name = serializers.SlugRelatedField(source="resource",
                                                  queryset=Resource.objects.all(), slug_field="name")
-    scheme = serializers.ReadOnlyField(source="domain.scheme")
-    root = serializers.ReadOnlyField(source="domain.root")
+    scheme = serializers.ReadOnlyField(source="archive.scheme")
+    root = serializers.ReadOnlyField(source="archive.root")
 
     class Meta:
         model = Location
-        fields = ('domain_name', 'scheme', 'root', 'resource_name')
+        fields = ('archive_name', 'scheme', 'root', 'resource_name')

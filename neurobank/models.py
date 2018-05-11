@@ -19,7 +19,7 @@ class Resource(models.Model):
         help_text="specify only for resources whose contents must not change (i.e., sources)"
     )
     dtype = models.ForeignKey("DataType", on_delete=models.PROTECT)
-    locations = models.ManyToManyField("Domain", through="Location")
+    locations = models.ManyToManyField("Archive", through="Location")
     created_on = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey('auth.User',
                               related_name='resources',
@@ -41,8 +41,8 @@ class DataType(models.Model):
 
 
 @python_2_unicode_compatible
-class Domain(models.Model):
-    """A domain defines a method and authority for locating a resource"""
+class Archive(models.Model):
+    """An archive defines a method and authority for locating a resource"""
     name = models.SlugField(max_length=32, unique=True, help_text="a descriptive name")
     scheme = models.CharField(max_length=16)
     root = models.CharField(max_length=512, help_text="root path for resources")
@@ -56,12 +56,12 @@ class Domain(models.Model):
 
 @python_2_unicode_compatible
 class Location(models.Model):
-    """A location consists of a resource and a domain"""
+    """A location consists of a resource and an archive"""
     resource = models.ForeignKey("Resource", on_delete=models.CASCADE)
-    domain = models.ForeignKey("Domain", on_delete=models.CASCADE)
+    archive = models.ForeignKey("Archive", on_delete=models.CASCADE)
 
     def __str__(self):
-        return ":".join((self.domain.name, str(self.resource)))
+        return ":".join((self.archive.name, str(self.resource)))
 
     class Meta:
-        unique_together = ("resource", "domain")
+        unique_together = ("resource", "archive")

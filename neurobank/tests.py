@@ -9,7 +9,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from django.contrib.auth.models import User
-from neurobank.models import Resource, DataType, Domain, Location
+from neurobank.models import Resource, DataType, Archive, Location
 
 
 class APIAuthTestCase(APITestCase):
@@ -35,7 +35,7 @@ class ResourceTests(APIAuthTestCase):
         self.dtype = DataType.objects.create(
             name="spike_times",
             content_type="application/vnd.meliza-org.pprox+json; version=1.0")
-        self.domain = Domain.objects.create(
+        self.archive = Archive.objects.create(
             name="local",
             scheme="neurobank",
             root="/home/data/intracellular")
@@ -46,7 +46,7 @@ class ResourceTests(APIAuthTestCase):
             metadata={"experimenter": "dmeliza"})
         self.location = Location.objects.create(
             resource=self.resource,
-            domain=self.domain)
+            archive=self.archive)
 
     def test_can_access_resource_list(self):
         response = self.client.get(reverse('neurobank:resource-list'))
@@ -94,11 +94,11 @@ class ResourceTests(APIAuthTestCase):
     def test_can_create_resource_with_location(self):
         self.login()
         response = self.client.post(reverse('neurobank:resource-list'),
-                                    {"dtype": self.dtype.name, "locations": [self.domain.name]},
+                                    {"dtype": self.dtype.name, "locations": [self.archive.name]},
                                     format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertDictContainsSubset({
-            "locations": [self.domain.name]}, response.data)
+            "locations": [self.archive.name]}, response.data)
 
     def test_cannot_create_resource_with_invalid_location(self):
         self.login()
@@ -116,7 +116,7 @@ class ResourceTests(APIAuthTestCase):
             "dtype": self.dtype.name,
             "created_by": self.user.username,
             "metadata": self.resource.metadata,
-            "locations": [self.domain.name]}, response.data)
+            "locations": [self.archive.name]}, response.data)
 
     def test_cannot_access_nonexistent_resource_detail(self):
         response = self.client.get(reverse('neurobank:resource', args=[uuid.uuid4()]))
@@ -159,7 +159,7 @@ class LocationTests(APIAuthTestCase):
         self.dtype = DataType.objects.create(
             name="spike_times",
             content_type="application/vnd.meliza-org.pproc+json; version=1.0")
-        self.domain = Domain.objects.create(
+        self.archive = Archive.objects.create(
             name="local",
             scheme="neurobank",
             root="/home/data/intracellular")
@@ -177,18 +177,18 @@ class LocationTests(APIAuthTestCase):
         self.assertEqual(response.data, [])
 
         self.login()
-        response = self.client.post(url, {"domain_name": self.domain.name}, format="json")
+        response = self.client.post(url, {"archive_name": self.archive.name}, format="json")
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
 
-        response = self.client.post(url, {"domain_name": self.domain.name})
+        response = self.client.post(url, {"archive_name": self.archive.name})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
         response = self.client.delete(reverse("neurobank:location",
-                                              args=[self.resource.name, self.domain.name]))
+                                              args=[self.resource.name, self.archive.name]))
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
         response = self.client.get(url)
@@ -243,94 +243,94 @@ class DataTypeTests(APIAuthTestCase):
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
 
-class DomainTests(APIAuthTestCase):
+class ArchiveTests(APIAuthTestCase):
 
     def setUp(self):
-        super(DomainTests, self).setUp()
-        self.domain = Domain.objects.create(
+        super(ArchiveTests, self).setUp()
+        self.archive = Archive.objects.create(
             name="local",
             scheme="neurobank",
             root="/home/data/intracellular")
 
-    def test_can_access_domain_list(self):
-        response = self.client.get(reverse("neurobank:domain-list"))
+    def test_can_access_archive_list(self):
+        response = self.client.get(reverse("neurobank:archive-list"))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
-    def test_can_access_domain_detail(self):
-        response = self.client.get(reverse("neurobank:domain", args=[self.domain.name]))
+    def test_can_access_archive_detail(self):
+        response = self.client.get(reverse("neurobank:archive", args=[self.archive.name]))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data,
-                         {"name": self.domain.name,
-                          "scheme": self.domain.scheme,
-                          "root": self.domain.root})
+                         {"name": self.archive.name,
+                          "scheme": self.archive.scheme,
+                          "root": self.archive.root})
 
-    def test_cannot_access_nonexistent_domain_detail(self):
-        response = self.client.get(reverse('neurobank:domain', args=["blarg"]))
+    def test_cannot_access_nonexistent_archive_detail(self):
+        response = self.client.get(reverse('neurobank:archive', args=["blarg"]))
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_can_create_domain(self):
+    def test_can_create_archive(self):
         self.login()
         data = {"name": "remote",
                 "scheme": "http",
                 "root": "/meliza.org/spike_times/"}
-        response = self.client.post(reverse("neurobank:domain-list"), data)
+        response = self.client.post(reverse("neurobank:archive-list"), data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data, data)
 
-        response2 = self.client.get(reverse("neurobank:domain", args=[data["name"]]))
+        response2 = self.client.get(reverse("neurobank:archive", args=[data["name"]]))
         self.assertEqual(response2.status_code, status.HTTP_200_OK)
         self.assertEqual(response2.data, data)
 
-    def test_cannot_create_duplicate_domain(self):
+    def test_cannot_create_duplicate_archive(self):
         self.login()
-        data = {"name": self.domain.name,
+        data = {"name": self.archive.name,
                 "scheme": "http",
                 "root": "/meliza.org/spike_times/"}
-        response = self.client.post(reverse("neurobank:domain-list"), data)
+        response = self.client.post(reverse("neurobank:archive-list"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_cannot_create_badly_named_domain(self):
+    def test_cannot_create_badly_named_archive(self):
         self.login()
         data = {"name": "blargh!!@!#",
                 "scheme": "http",
                 "root": "/meliza.org/spike_times/"}
-        response = self.client.post(reverse("neurobank:domain-list"), data)
+        response = self.client.post(reverse("neurobank:archive-list"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_cannot_delete_domain(self):
+    def test_cannot_delete_archive(self):
         self.login()
-        response = self.client.delete(reverse("neurobank:domain", args=[self.domain.name]))
+        response = self.client.delete(reverse("neurobank:archive", args=[self.archive.name]))
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
-    def test_can_modify_domain(self):
+    def test_can_modify_archive(self):
         self.login()
-        response = self.client.patch(reverse("neurobank:domain", args=[self.domain.name]),
+        response = self.client.patch(reverse("neurobank:archive", args=[self.archive.name]),
                                      {"name": "local_intrac"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
 
-class DomainFilterTests(APIAuthTestCase):
+class ArchiveFilterTests(APIAuthTestCase):
 
     def setUp(self):
-        super(DomainFilterTests, self).setUp()
-        self.domain_1 = Domain.objects.create(
+        super(ArchiveFilterTests, self).setUp()
+        self.archive_1 = Archive.objects.create(
             name="intracellular",
             scheme="neurobank",
             root="/home/data/intracellular")
-        self.domain_2 = Domain.objects.create(
+        self.archive_2 = Archive.objects.create(
             name="extracellular",
             scheme="http",
             root="/meliza.org/data/extracellular")
 
     def test_can_filter_by_scheme(self):
-        url = reverse('neurobank:domain-list')
-        response = self.client.get(url, {"scheme": self.domain_1.scheme })
+        url = reverse('neurobank:archive-list')
+        response = self.client.get(url, {"scheme": self.archive_1.scheme })
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
 
     def test_can_filter_by_root(self):
-        url = reverse('neurobank:domain-list')
-        response = self.client.get(url, {"root": self.domain_1.root })
+        url = reverse('neurobank:archive-list')
+        response = self.client.get(url, {"root": self.archive_1.root })
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
 
@@ -345,11 +345,11 @@ class ResourceFilterTests(APIAuthTestCase):
         self.dtype2 = DataType.objects.create(
             name="acoustic_waveform",
             content_type="audio/wav")
-        self.domain_local = Domain.objects.create(
+        self.archive_local = Archive.objects.create(
             name="local",
             scheme="neurobank",
             root="/home/data/intracellular")
-        self.domain_remote = Domain.objects.create(
+        self.archive_remote = Archive.objects.create(
             name="remote",
             scheme="http",
             root="/meliza.org/data/intracellular")
@@ -360,17 +360,17 @@ class ResourceFilterTests(APIAuthTestCase):
             metadata={"experimenter": "dmeliza"})
         Location.objects.create(
             resource=self.resource1,
-            domain=self.domain_local)
+            archive=self.archive_local)
         Location.objects.create(
             resource=self.resource1,
-            domain=self.domain_remote)
+            archive=self.archive_remote)
         self.resource2 = Resource.objects.create(
             dtype=self.dtype2,
             created_by=self.user,
             metadata={"experimenter": "mcb2x"})
         Location.objects.create(
             resource=self.resource2,
-            domain=self.domain_local)
+            archive=self.archive_local)
 
     def test_can_filter_by_name(self):
         response = self.client.get(reverse('neurobank:resource-list'),
@@ -394,13 +394,13 @@ class ResourceFilterTests(APIAuthTestCase):
 
     def test_can_filter_by_location(self):
         response = self.client.get(reverse('neurobank:resource-list'),
-                                   {"location": self.domain_local.name})
+                                   {"location": self.archive_local.name})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 2)
 
     def test_can_filter_by_scheme(self):
         response = self.client.get(reverse('neurobank:resource-list'),
-                                   {"scheme": self.domain_remote.scheme})
+                                   {"scheme": self.archive_remote.scheme})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
 
@@ -419,11 +419,11 @@ class LocationFilterTests(APIAuthTestCase):
         self.dtype = DataType.objects.create(
             name="spike_times",
             content_type="application/vnd.meliza-org.pproc+json; version=1.0")
-        self.domain_local = Domain.objects.create(
+        self.archive_local = Archive.objects.create(
             name="local",
             scheme="neurobank",
             root="/home/data/intracellular")
-        self.domain_remote = Domain.objects.create(
+        self.archive_remote = Archive.objects.create(
             name="remote",
             scheme="http",
             root="/meliza.org/data/intracellular")
@@ -434,19 +434,19 @@ class LocationFilterTests(APIAuthTestCase):
             metadata={"experimenter": "dmeliza"})
         Location.objects.create(
             resource=self.resource,
-            domain=self.domain_local)
+            archive=self.archive_local)
         Location.objects.create(
             resource=self.resource,
-            domain=self.domain_remote)
+            archive=self.archive_remote)
 
     def test_can_filter_by_name(self):
         url = reverse('neurobank:location-list', args=[self.resource.name])
-        response = self.client.get(url, {"name": self.domain_local.name[:4]})
+        response = self.client.get(url, {"name": self.archive_local.name[:4]})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
 
     def test_can_filter_by_scheme(self):
         url = reverse('neurobank:location-list', args=[self.resource.name])
-        response = self.client.get(url, {"scheme": self.domain_remote.scheme})
+        response = self.client.get(url, {"scheme": self.archive_remote.scheme})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)

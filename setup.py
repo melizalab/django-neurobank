@@ -6,7 +6,7 @@ if sys.hexversion < 0x02060000:
     raise RuntimeError("Python 2.6 or higher required")
 from setuptools import setup
 
-VERSION = '0.7.2'
+VERSION = '0.7.7'
 cls_txt = """
 Development Status :: 3 - Alpha
 Framework :: Django
@@ -21,7 +21,7 @@ Topic :: Internet :: WWW/HTTP :: Dynamic Content
 setup(
     name="django-neurobank",
     version=VERSION,
-    description="A simple Django backend for the neurobank system",
+    description="A Django-based registry for the neurobank system",
     long_description=open(os.path.join(os.path.dirname(__file__), 'README.md')).read(),
     classifiers=[x for x in cls_txt.split("\n") if x],
     author='C Daniel Meliza',

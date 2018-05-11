@@ -1,5 +1,5 @@
 from django.contrib import admin
-from neurobank.models import Resource, DataType, Domain, Location
+from neurobank.models import Resource, DataType, Archive, Location
 
 class LocationInline(admin.TabularInline):
     model = Location
@@ -9,7 +9,7 @@ class DataTypeAdmin(admin.ModelAdmin):
     list_display = ('name', 'content_type')
 
 
-class DomainAdmin(admin.ModelAdmin):
+class ArchiveAdmin(admin.ModelAdmin):
     list_display = ('name', 'scheme', 'root')
     list_filter = ('name', 'scheme')
     search_fields = ('name__istartswith', 'scheme__istartswith', 'root__icontains')
@@ -24,4 +24,4 @@ class ResourceAdmin(admin.ModelAdmin):
 
 admin.site.register(Resource, ResourceAdmin)
 admin.site.register(DataType, DataTypeAdmin)
-admin.site.register(Domain, DomainAdmin)
+admin.site.register(Archive, ArchiveAdmin)
