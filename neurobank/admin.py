@@ -16,10 +16,10 @@ class DomainAdmin(admin.ModelAdmin):
 
 
 class ResourceAdmin(admin.ModelAdmin):
-    fields = ('name', 'sha1', 'dtype',)
+    fields = ('name', 'sha1', 'dtype', 'metadata')
     list_display = ('name', 'dtype',)
     list_filter = ('name', 'dtype')
-    search_fields = ('name__istartswith', 'sha1__istartswith', 'dtype')
+    search_fields = ('name__istartswith', 'sha1__istartswith', 'dtype', 'metadata__icontains')
     inlines = (LocationInline,)
 
 admin.site.register(Resource, ResourceAdmin)
