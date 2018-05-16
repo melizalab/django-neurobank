@@ -22,14 +22,14 @@ class ResourceSerializer(serializers.ModelSerializer):
     dtype = serializers.SlugRelatedField(
         queryset=DataType.objects.all(), slug_field='name',
         error_messages={
-            'does_not_exist': 'dtype with name {value} does not exist.',
-            'invalid': 'invalid dtype'})
+            'does_not_exist': "no such dtype '{value}'",
+            'invalid': 'invalid dtype name'})
     locations = serializers.SlugRelatedField(
         queryset=Archive.objects.all(), required=False,
         many=True, slug_field='name',
         error_messages={
-            'does_not_exist': 'archive with name {value} does not exist.',
-            'invalid': 'invalid archive'})
+            'does_not_exist': "no such archive '{value}'",
+            'invalid': 'invalid archive name'})
     created_by = serializers.ReadOnlyField(source='created_by.username')
 
     def validate_sha1(self, value):

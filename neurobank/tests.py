@@ -379,6 +379,13 @@ class ResourceFilterTests(APIAuthTestCase):
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["name"], str(self.resource1.name))
 
+    def test_can_filter_by_sha1(self):
+        response = self.client.get(reverse('neurobank:resource-list'),
+                                   {"sha1": str(self.resource1.sha1)[:6]})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["name"], str(self.resource1.name))
+
     def test_can_filter_by_dtype(self):
         response = self.client.get(reverse('neurobank:resource-list'),
                                    {"dtype": self.dtype1.name})
