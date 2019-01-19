@@ -4,6 +4,7 @@ from django.conf.urls import url
 
 from neurobank import views
 
+app_name = "neurobank"
 urlpatterns = [
     url(r'^$', views.api_root, name='index'),
     url(r"^datatypes/$", views.DataTypeList.as_view(), name="datatype-list"),

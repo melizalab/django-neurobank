@@ -30,6 +30,7 @@ class ArchiveFilter(filters.FilterSet):
     name = filters.CharFilter(name="name", lookup_expr="istartswith")
     scheme = filters.CharFilter(name="scheme", lookup_expr="istartswith")
     root = filters.CharFilter(name="root", lookup_expr="iexact")
+
     class Meta:
         model = models.Archive
         fields = ["name", "scheme", "root"]
@@ -51,8 +52,9 @@ class ResourceFilter(filters.FilterSet):
 
 
 class LocationFilter(filters.FilterSet):
-    name = filters.CharFilter(name="archive__name", lookup_expr = "icontains")
-    scheme = filters.CharFilter(name="archive__scheme", lookup_expr = "istartswith")
+    name = filters.CharFilter(name="archive__name", lookup_expr="icontains")
+    scheme = filters.CharFilter(name="archive__scheme", lookup_expr="istartswith")
+
     class Meta:
         model = models.Location
         fields = ["name", "scheme"]

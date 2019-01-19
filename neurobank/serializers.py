@@ -10,6 +10,7 @@ from neurobank.models import Resource, DataType, Archive, Location
 
 sha1_re = re.compile(r"[0-9a-fA-F]{40}")
 
+
 class SlugField(serializers.SlugField):
     default_error_messages = {"invalid":
                               "can only contain letters, numbers, underscores, and hyphens"}
@@ -46,7 +47,7 @@ class ResourceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Resource
-        fields = ('name', 'sha1', 'dtype','metadata', 'locations',
+        fields = ('name', 'sha1', 'dtype', 'metadata', 'locations',
                   'created_by', 'created_on')
 
     def create(self, validated_data):
@@ -77,7 +78,7 @@ class ArchiveSerializer(serializers.ModelSerializer):
 
 class LocationSerializer(serializers.ModelSerializer):
     archive_name = serializers.SlugRelatedField(source="archive",
-                                               queryset=Archive.objects.all(), slug_field="name")
+                                                queryset=Archive.objects.all(), slug_field="name")
     resource_name = serializers.SlugRelatedField(source="resource",
                                                  queryset=Resource.objects.all(), slug_field="name")
     scheme = serializers.ReadOnlyField(source="archive.scheme")

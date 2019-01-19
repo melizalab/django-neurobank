@@ -22,7 +22,7 @@ INSTALLED_APPS = (
 )
 ```
 
-You'll also need to add Make sure you have `rest_framework` and `django_filters` if you want to use the browseable API.
+You'll also need to add `rest_framework` and `django_filters`.
 
 2. Include the neurobank URLconf in your project urls.py like this::
 
