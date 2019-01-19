@@ -27,9 +27,9 @@ def notfound(request, format=None):
 
 
 class ArchiveFilter(filters.FilterSet):
-    name = filters.CharFilter(name="name", lookup_expr="istartswith")
-    scheme = filters.CharFilter(name="scheme", lookup_expr="istartswith")
-    root = filters.CharFilter(name="root", lookup_expr="iexact")
+    name = filters.CharFilter(field_name="name", lookup_expr="istartswith")
+    scheme = filters.CharFilter(field_name="scheme", lookup_expr="istartswith")
+    root = filters.CharFilter(field_name="root", lookup_expr="iexact")
 
     class Meta:
         model = models.Archive
@@ -37,12 +37,12 @@ class ArchiveFilter(filters.FilterSet):
 
 
 class ResourceFilter(filters.FilterSet):
-    name = filters.CharFilter(name="name", lookup_expr="icontains")
-    sha1 = filters.CharFilter(name="sha1", lookup_expr="icontains")
-    dtype = filters.CharFilter(name="dtype__name", lookup_expr="icontains")
-    location = filters.CharFilter(name="locations__name", lookup_expr="icontains")
-    created_by = filters.CharFilter(name="created_by__username", lookup_expr="icontains")
-    scheme = filters.CharFilter(name="locations__scheme", lookup_expr="istartswith")
+    name = filters.CharFilter(field_name="name", lookup_expr="icontains")
+    sha1 = filters.CharFilter(field_name="sha1", lookup_expr="icontains")
+    dtype = filters.CharFilter(field_name="dtype__name", lookup_expr="icontains")
+    location = filters.CharFilter(field_name="locations__name", lookup_expr="icontains")
+    created_by = filters.CharFilter(field_name="created_by__username", lookup_expr="icontains")
+    scheme = filters.CharFilter(field_name="locations__scheme", lookup_expr="istartswith")
 
     class Meta:
         model = models.Resource
@@ -52,8 +52,8 @@ class ResourceFilter(filters.FilterSet):
 
 
 class LocationFilter(filters.FilterSet):
-    name = filters.CharFilter(name="archive__name", lookup_expr="icontains")
-    scheme = filters.CharFilter(name="archive__scheme", lookup_expr="istartswith")
+    name = filters.CharFilter(field_name="archive__name", lookup_expr="icontains")
+    scheme = filters.CharFilter(field_name="archive__scheme", lookup_expr="istartswith")
 
     class Meta:
         model = models.Location

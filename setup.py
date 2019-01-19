@@ -6,7 +6,7 @@ if sys.hexversion < 0x02060000:
     raise RuntimeError("Python 2.6 or higher required")
 from setuptools import setup
 
-VERSION = '0.7.7'
+VERSION = '0.8.0'
 cls_txt = """
 Development Status :: 3 - Alpha
 Framework :: Django
@@ -26,7 +26,7 @@ setup(
     classifiers=[x for x in cls_txt.split("\n") if x],
     author='C Daniel Meliza',
     maintainer='C Daniel Meliza',
-    url = "https://github.com/melizalab/django-neurobank",
+    url="https://github.com/melizalab/django-neurobank",
     packages=['neurobank'],
     include_package_data=True,
 )
