@@ -1,4 +1,4 @@
 include README.md
 include COPYING
-recursive-include django_neurobank/templates *
+recursive-include neurobank/migrations *
 recursive-include docs *
