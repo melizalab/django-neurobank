@@ -71,7 +71,7 @@ class ResourceList(generics.ListCreateAPIView):
     def filter_queryset(self, queryset):
         qs = super(ResourceList, self).filter_queryset(queryset)
         # this could be a little dangerous b/c we're letting the user design queries
-        mq = {k: v for k,v in self.request.GET.items() if k.startswith("metadata__")}
+        mq = {k: v for (k, v) in self.request.GET.items() if k.startswith("metadata__")}
         return qs.filter(**mq).order_by("name")
 
     def perform_create(self, serializer):

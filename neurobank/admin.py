@@ -1,5 +1,10 @@
+# -*- coding: utf-8 -*-
+# -*- mode: python -*-
+from __future__ import unicode_literals
+
 from django.contrib import admin
 from neurobank.models import Resource, DataType, Archive, Location
+
 
 class LocationInline(admin.TabularInline):
     model = Location
@@ -21,6 +26,7 @@ class ResourceAdmin(admin.ModelAdmin):
     list_filter = ('name', 'dtype')
     search_fields = ('name__istartswith', 'sha1__istartswith', 'dtype', 'metadata__icontains')
     inlines = (LocationInline,)
+
 
 admin.site.register(Resource, ResourceAdmin)
 admin.site.register(DataType, DataTypeAdmin)
