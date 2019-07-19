@@ -25,6 +25,7 @@ setup(
     version=VERSION,
     description="A Django-based registry for the neurobank system",
     long_description=open(os.path.join(os.path.dirname(__file__), 'README.md')).read(),
+    long_description_content_type="text/markdown",
     classifiers=[x for x in cls_txt.split("\n") if x],
     author='C Daniel Meliza',
     maintainer='C Daniel Meliza',
