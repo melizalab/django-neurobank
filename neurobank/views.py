@@ -31,8 +31,8 @@ def notfound(request, format=None):
 @api_view(['GET'])
 def api_info(request, format=None):
     return Response({
-        'registry': 'django-neurobank',
-        'registry_version': __version__,
+        'name': 'django-neurobank',
+        'version': __version__,
         'api_version': api_version
     })
 
