@@ -8,6 +8,7 @@ from rest_framework.reverse import reverse
 from django_filters import rest_framework as filters
 from drf_link_header_pagination import LinkHeaderPagination
 
+from neurobank import __version__, api_version
 from neurobank import models
 from neurobank import serializers
 
@@ -15,6 +16,7 @@ from neurobank import serializers
 @api_view(['GET'])
 def api_root(request, format=None):
     return Response({
+        'info': reverse('neurobank:api-info', request=request, format=format),
         'resources': reverse('neurobank:resource-list', request=request, format=format),
         'datatypes': reverse('neurobank:datatype-list', request=request, format=format),
         'archives': reverse('neurobank:archive-list', request=request, format=format)
@@ -24,6 +26,15 @@ def api_root(request, format=None):
 @api_view(['GET'])
 def notfound(request, format=None):
     return Response({'detail': 'not found'}, status=status.HTTP_404_NOT_FOUND)
+
+
+@api_view(['GET'])
+def api_info(request, format=None):
+    return Response({
+        'registry': 'django-neurobank',
+        'registry_version': __version__,
+        'api_version': api_version
+    })
 
 
 class ArchiveFilter(filters.FilterSet):

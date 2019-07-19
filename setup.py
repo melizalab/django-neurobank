@@ -6,7 +6,9 @@ if sys.hexversion < 0x02060000:
     raise RuntimeError("Python 2.6 or higher required")
 from setuptools import setup
 
-VERSION = '0.8.0'
+from neurobank import __version__
+
+VERSION = __version__
 cls_txt = """
 Development Status :: 3 - Alpha
 Framework :: Django

@@ -7,6 +7,7 @@ from neurobank import views
 app_name = "neurobank"
 urlpatterns = [
     url(r'^$', views.api_root, name='index'),
+    url(r'^info/$', views.api_info, name='api-info'),
     url(r"^datatypes/$", views.DataTypeList.as_view(), name="datatype-list"),
     url(r"^datatypes/(?P<name>[\w-]+)/$", views.DataTypeDetail.as_view(),
         name='datatype'),
