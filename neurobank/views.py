@@ -76,8 +76,11 @@ class ResourceList(generics.ListCreateAPIView):
 
     It can be filtered using query params on name, dtype, location, sha1, etc (see OPTIONS).
 
-    It can also be filtered on metadata by prefixing the query parameter with `metadata__`.
-    For example, `?metadata__experimenter=dmeliza`
+    It can also be filtered on metadata by prefixing the query parameter with
+    `metadata__`. For example, `?metadata__experimenter=dmeliza`. Exclusions are
+    indicated by the suffix `__neq`, e.g.,
+    `?metadata__experimenter__neq=dmeliza`
+
     """
 
     queryset = models.Resource.objects.all()
@@ -89,9 +92,17 @@ class ResourceList(generics.ListCreateAPIView):
 
     def filter_queryset(self, queryset):
         qs = super(ResourceList, self).filter_queryset(queryset)
-        # this could be a little dangerous b/c we're letting the user design queries
-        mq = {k: v for (k, v) in self.request.GET.items() if k.startswith("metadata__")}
-        return qs.filter(**mq).order_by("name")
+        # this could be a little dangerous b/c we're letting the user design
+        # queries
+        mf = {}
+        me = {}
+        for (k, v) in self.request.GET.items():
+            if k.startswith("metadata__"):
+                if k.endswith("__neq"):
+                    me[k[:-5]] = v
+                else:
+                    mf[k] = v
+        return qs.exclude(**me).filter(**mf).order_by("name")
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
