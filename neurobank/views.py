@@ -74,12 +74,16 @@ class LocationFilter(filters.FilterSet):
 class ResourceList(generics.ListCreateAPIView):
     """This view is a list of resources in the registry.
 
-    It can be filtered using query params on name, dtype, location, sha1, etc (see OPTIONS).
+    Results can be filtered using query params on name, dtype, location, sha1, etc (see OPTIONS).
 
-    It can also be filtered on metadata by prefixing the query parameter with
-    `metadata__`. For example, `?metadata__experimenter=dmeliza`. Exclusions are
-    indicated by the suffix `__neq`, e.g.,
-    `?metadata__experimenter__neq=dmeliza`
+    Results can be flexibly filtered on metadata by prefixing the query parameter
+    with `metadata__`. Use django suffixes for other kinds of matches and
+    `__neq` for exclusions. For example, `?metadata__experimenter=dmeliza` will
+    return all resources with experimenter set to dmeliza,
+    `?metadata__experimenter_neq=dmeliza` will return all resources with
+    experimenter set to something else, and
+    `?metadata__experimenter__isnull=True` will return all resources without a
+    value set for `experimenter`.
 
     """
 
