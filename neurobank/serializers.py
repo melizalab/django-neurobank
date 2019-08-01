@@ -32,6 +32,7 @@ class ResourceSerializer(serializers.ModelSerializer):
             'does_not_exist': "no such archive '{value}'",
             'invalid': 'invalid archive name'})
     created_by = serializers.ReadOnlyField(source='created_by.username')
+    metadata = serializers.JSONField()
 
     def validate_sha1(self, value):
         if self.instance is not None and self.instance.sha1 != value:
@@ -56,6 +57,25 @@ class ResourceSerializer(serializers.ModelSerializer):
         for archive in archives:
             Location.objects.create(resource=resource, archive=archive)
         return resource
+
+    def update(self, instance, validated_data):
+        """Update the instance with supplied data.
+
+        For the metadata field, any sub-fields not in the supplied data are
+        retained. To delete a subfield, set it to None
+        """
+        archives = validated_data.pop('locations', [])
+        for archive in archives:
+            if archive not in instance.locations:
+                Location.objects.create(resource=resource, archive=archive)
+        instance.dtype = validated_data.get('dtype', instance.dtype)
+        for key, value in validated_data.get('metadata', {}).items():
+            if value is not None:
+                instance.metadata[key] = value
+            else:
+                instance.metadata.pop(key, None)
+        instance.save()
+        return instance
 
 
 class DataTypeSerializer(serializers.ModelSerializer):

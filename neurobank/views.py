@@ -72,6 +72,14 @@ class LocationFilter(filters.FilterSet):
 
 
 class ResourceList(generics.ListCreateAPIView):
+    """This view is a list of resources in the registry.
+
+    It can be filtered using query params on name, dtype, location, sha1, etc (see OPTIONS).
+
+    It can also be filtered on metadata by prefixing the query parameter with `metadata__`.
+    For example, `?metadata__experimenter=dmeliza`
+    """
+
     queryset = models.Resource.objects.all()
     serializer_class = serializers.ResourceSerializer
     filter_backends = (filters.DjangoFilterBackend,)
