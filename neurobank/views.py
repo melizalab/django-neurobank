@@ -165,8 +165,8 @@ class LocationList(generics.ListAPIView):
         return resource.location_set.all()
 
     def post(self, request, *args, **kwargs):
-        data = {"archive": request.data["archive_name"],
-                "resource": kwargs["resource_name"]}
+        data = {"archive_name": request.data["archive_name"],
+                "resource_name": kwargs["resource_name"]}
         serializer = serializers.LocationSerializer(data=data)
         if serializer.is_valid():
             serializer.save()

@@ -5,7 +5,7 @@ from __future__ import unicode_literals
 import re
 
 from rest_framework import serializers
-from rest_framework.validators import UniqueValidator
+from rest_framework.validators import UniqueValidator, UniqueTogetherValidator
 from neurobank.models import Resource, DataType, Archive, Location
 
 sha1_re = re.compile(r"[0-9a-fA-F]{40}")
@@ -97,11 +97,17 @@ class ArchiveSerializer(serializers.ModelSerializer):
 
 
 class LocationSerializer(serializers.ModelSerializer):
-    archive = serializers.SlugRelatedField(queryset=Archive.objects.all(), slug_field="name",
+    archive_name = serializers.SlugRelatedField(
+        source="archive",
+        queryset=Archive.objects.all(),
+        slug_field="name",
         error_messages={
             'does_not_exist': "no such archive '{value}'",
             'invalid': 'invalid archive name'})
-    resource = serializers.SlugRelatedField(queryset=Resource.objects.all(), slug_field="name",
+    resource_name = serializers.SlugRelatedField(
+        source="resource",
+        queryset=Resource.objects.all(),
+        slug_field="name",
         error_messages={
             'does_not_exist': "no such resource '{value}'",
             'invalid': 'invalid resource name'})
@@ -110,4 +116,7 @@ class LocationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Location
-        fields = ('archive', 'scheme', 'root', 'resource')
+        fields = ('archive_name', 'scheme', 'root', 'resource_name')
+        validators = [
+            UniqueTogetherValidator(queryset=Location.objects.all(), fields=('resource_name', 'archive_name'))
+        ]
