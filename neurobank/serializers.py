@@ -32,7 +32,7 @@ class ResourceSerializer(serializers.ModelSerializer):
             'does_not_exist': "no such archive '{value}'",
             'invalid': 'invalid archive name'})
     created_by = serializers.ReadOnlyField(source='created_by.username')
-    metadata = serializers.JSONField()
+    metadata = serializers.JSONField(required=False)
 
     def validate_sha1(self, value):
         if self.instance is not None and self.instance.sha1 != value:
