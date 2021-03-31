@@ -97,13 +97,17 @@ class ArchiveSerializer(serializers.ModelSerializer):
 
 
 class LocationSerializer(serializers.ModelSerializer):
-    archive_name = serializers.SlugRelatedField(source="archive",
-                                                queryset=Archive.objects.all(), slug_field="name")
-    resource_name = serializers.SlugRelatedField(source="resource",
-                                                 queryset=Resource.objects.all(), slug_field="name")
+    archive = serializers.SlugRelatedField(queryset=Archive.objects.all(), slug_field="name",
+        error_messages={
+            'does_not_exist': "no such archive '{value}'",
+            'invalid': 'invalid archive name'})
+    resource = serializers.SlugRelatedField(queryset=Resource.objects.all(), slug_field="name",
+        error_messages={
+            'does_not_exist': "no such resource '{value}'",
+            'invalid': 'invalid resource name'})
     scheme = serializers.ReadOnlyField(source="archive.scheme")
     root = serializers.ReadOnlyField(source="archive.root")
 
     class Meta:
         model = Location
-        fields = ('archive_name', 'scheme', 'root', 'resource_name')
+        fields = ('archive', 'scheme', 'root', 'resource')
