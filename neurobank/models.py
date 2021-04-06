@@ -11,7 +11,7 @@ from neurobank.tools import random_id
 class Resource(models.Model):
     """A resource has a unique identifier, a defined type, and some optional metadata"""
     id = models.AutoField(primary_key=True)
-    name = models.SlugField(max_length=64, default=random_id, unique=True)
+    name = models.SlugField(max_length=255, default=random_id, unique=True)
     sha1 = models.CharField(
         max_length=40, unique=True,
         blank=True, null=True,
