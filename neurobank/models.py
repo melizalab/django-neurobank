@@ -2,7 +2,7 @@
 # -*- mode: python -*-
 from __future__ import unicode_literals
 
-from django.contrib.postgres.fields import HStoreField
+from django.contrib.postgres.fields import JSONField
 from django.db import models
 
 from neurobank.tools import random_id
@@ -23,7 +23,7 @@ class Resource(models.Model):
     created_by = models.ForeignKey('auth.User',
                               related_name='resources',
                               on_delete=models.CASCADE)
-    metadata = HStoreField(blank=True, null=True)
+    metadata = JSONField(blank=True, null=True)
 
     def __str__(self):
         return str(self.name)
