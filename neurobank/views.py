@@ -90,7 +90,7 @@ class ResourceList(generics.ListCreateAPIView):
     queryset = models.Resource.objects.all()
     serializer_class = serializers.ResourceSerializer
     filter_backends = (filters.DjangoFilterBackend,)
-    filter_class = ResourceFilter
+    filterset_class = ResourceFilter
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
     pagination_class = LinkHeaderPagination
 
@@ -125,7 +125,7 @@ class ArchiveList(generics.ListCreateAPIView):
     serializer_class = serializers.ArchiveSerializer
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
     filter_backends = (filters.DjangoFilterBackend,)
-    filter_class = ArchiveFilter
+    filterset_class = ArchiveFilter
 
 
 class ArchiveDetail(generics.RetrieveUpdateAPIView):
@@ -154,7 +154,7 @@ class LocationList(generics.ListAPIView):
     queryset = models.Location.objects.all()
     serializer_class = serializers.LocationSerializer
     filter_backends = (filters.DjangoFilterBackend,)
-    filter_class = LocationFilter
+    filterset_class = LocationFilter
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
 
     def get_object(self):
