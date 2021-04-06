@@ -3,12 +3,11 @@
 from __future__ import unicode_literals
 
 from django.contrib.postgres.fields import HStoreField
-from django.utils.encoding import python_2_unicode_compatible
 from django.db import models
 
 from neurobank.tools import random_id
 
-@python_2_unicode_compatible
+
 class Resource(models.Model):
     """A resource has a unique identifier, a defined type, and some optional metadata"""
     id = models.AutoField(primary_key=True)
@@ -29,8 +28,10 @@ class Resource(models.Model):
     def __str__(self):
         return str(self.name)
 
+    class Meta:
+        ordering = ["-id"]
 
-@python_2_unicode_compatible
+
 class DataType(models.Model):
     """A datatype has a name and an optional link to a specification"""
     name = models.SlugField(max_length=32, unique=True)
@@ -39,8 +40,10 @@ class DataType(models.Model):
     def __str__(self):
         return self.name
 
+    class Meta:
+        ordering = ["name"]
 
-@python_2_unicode_compatible
+
 class Archive(models.Model):
     """An archive defines a method and authority for locating a resource"""
     name = models.SlugField(max_length=32, unique=True, help_text="a descriptive name")
@@ -52,9 +55,9 @@ class Archive(models.Model):
 
     class Meta:
         unique_together = ("scheme", "root")
+        ordering = ["name"]
 
 
-@python_2_unicode_compatible
 class Location(models.Model):
     """A location consists of a resource and an archive"""
     resource = models.ForeignKey("Resource", on_delete=models.CASCADE)
@@ -65,3 +68,4 @@ class Location(models.Model):
 
     class Meta:
         unique_together = ("resource", "archive")
+        ordering = ["-id"]
