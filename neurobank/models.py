@@ -68,7 +68,7 @@ class Location(models.Model):
         if self.archive.scheme == "neurobank":
             directory = Path(self.archive.root) / Path("resources") / \
                     Path(self.resource.name[0:2])
-            return next(directory.glob(f'{self.resource.name}*'))
+            return next(directory.glob(f'{self.resource.name}.*'))
         raise NotImplementedError
 
     def __str__(self):
