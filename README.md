@@ -23,6 +23,7 @@ INSTALLED_APPS = (
 ```
 
 You'll also need to add `rest_framework` and `django_filters`.
+Since `neurobank` uses `django-sendfile` to efficiently serve large files, you will need to set `settings.SENDFILE_BACKEND` and possibly other keys, depending on which reverse proxy you are using. Consult [the documentation for django-sendfile](https://github.com/johnsensible/django-sendfile/blob/master/README.rst) for details.
 
 2. Include the neurobank URLconf in your project urls.py like this::
 

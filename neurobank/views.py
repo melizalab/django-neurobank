@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
 # -*- mode: python -*-
 from django.shortcuts import get_object_or_404
+from django.views.generic.detail import BaseDetailView
 from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from rest_framework.reverse import reverse
 from django_filters import rest_framework as filters
 from drf_link_header_pagination import LinkHeaderPagination
+from sendfile import sendfile
 
 from neurobank import __version__, api_version
 from neurobank import models
@@ -117,6 +119,25 @@ class ResourceDetail(generics.RetrieveUpdateAPIView):
     queryset = models.Resource.objects.all()
     serializer_class = serializers.ResourceSerializer
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
+
+
+class ResourceDownload(BaseDetailView):
+    slug_url_kwarg = "name"
+    slug_field = "name"
+    model = models.Resource
+    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
+
+    def render_to_response(self, context):
+        for location in self.object.location_set.all():
+            try:
+                return sendfile(
+                    self.request,
+                    location.resolve_to_path(),
+                    attachment=True
+                    )
+            except NotImplementedError:
+                pass
+        raise NotImplementedError
 
 
 class ArchiveList(generics.ListCreateAPIView):

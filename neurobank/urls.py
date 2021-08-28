@@ -17,6 +17,8 @@ urlpatterns = [
     url(r"^resources/$", views.ResourceList.as_view(), name="resource-list"),
     url(r"^resources/(?P<name>[\w-]+)/$", views.ResourceDetail.as_view(),
         name='resource'),
+    url(r"^resources/(?P<name>[\w-]+)/download", views.ResourceDownload.as_view(),
+        name='resource-download'),
     url(r"^resources/(?P<resource_name>[\w-]+)/locations/$",
         views.LocationList.as_view(), name="location-list"),
     url(r"^resources/(?P<resource_name>[\w-]+)/locations/(?P<archive_pk>[\w-]+)/$",

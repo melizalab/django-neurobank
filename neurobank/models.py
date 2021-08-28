@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # -*- mode: python -*-
 from __future__ import unicode_literals
+from pathlib import Path
 
 from django.contrib.postgres.fields import JSONField
 from django.db import models
@@ -62,6 +63,13 @@ class Location(models.Model):
     """A location consists of a resource and an archive"""
     resource = models.ForeignKey("Resource", on_delete=models.CASCADE)
     archive = models.ForeignKey("Archive", on_delete=models.CASCADE)
+
+    def resolve_to_path(self):
+        if self.archive.scheme == "neurobank":
+            directory = Path(self.archive.root) / Path("resources") / \
+                    Path(self.resource.name[0:2])
+            return next(directory.glob(f'{self.resource.name}*'))
+        raise NotImplementedError
 
     def __str__(self):
         return ":".join((self.archive.name, str(self.resource)))
