@@ -1,15 +1,19 @@
 # -*- coding: utf-8 -*-
 # -*- mode: python -*-
 import hashlib
+import os
+import tempfile
 import uuid
 import posixpath as ppath
 
 from django.urls import reverse
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from django.contrib.auth.models import User
 from neurobank.models import Resource, DataType, Archive, Location
+from neurobank import errors
 
 
 class APIAuthTestCase(APITestCase):
@@ -457,3 +461,67 @@ class LocationFilterTests(APIAuthTestCase):
         response = self.client.get(url, {"scheme": self.archive_remote.scheme})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
+
+@override_settings(
+        SENDFILE_BACKEND="sendfile.backends.nginx",
+        SENDFILE_ROOT='/',
+        SENDFILE_URL='/',
+)
+class DownloadTests(APIAuthTestCase):
+    def _create_file(self, content=b"", skip_file_creation=False):
+        file = tempfile.NamedTemporaryFile()
+        file.write(content)
+        resource = Resource.objects.create(
+            sha1=hashlib.sha1(content).hexdigest(),
+            dtype=self.dtype,
+            created_by=self.user,
+            metadata={"experimenter": "dmeliza"})
+        Location.objects.create(
+            resource=resource,
+            archive=self.archive)
+        fs_path = ppath.join(
+            self.directory.name,
+            "resources",
+            resource.name[0:2],
+            resource.name+".bin"
+        )
+        if not skip_file_creation:
+            os.makedirs(os.path.dirname(fs_path), exist_ok=True)
+            with open(fs_path, "wb") as f:
+                f.write(file.read())
+        return resource, fs_path
+
+
+    def setUp(self):
+        super(DownloadTests, self).setUp()
+        self.directory = tempfile.TemporaryDirectory()
+        self.dtype = DataType.objects.create(
+            name="spike_times",
+            content_type="application/vnd.meliza-org.pprox+json; version=1.0")
+        self.archive = Archive.objects.create(
+            name="local",
+            scheme="neurobank",
+            root=self.directory.name)
+        self.resource, self.fs_path = self._create_file()
+
+    def tearDown(self):
+        super(DownloadTests, self).tearDown()
+        self.directory.cleanup()
+
+    def test_nginx_header(self):
+        url = reverse('neurobank:resource-download', args=[self.resource.name])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(ppath.samefile(
+            response['X-Accel-Redirect'],
+            self.fs_path,
+        ))
+
+    def test_missing_file(self):
+        missing_resource, _ = self._create_file(
+                b"missing",
+                skip_file_creation=True
+        )
+        url = reverse('neurobank:resource-download', args=[missing_resource.name])
+        with self.assertRaises(errors.MissingFile):
+            self.client.get(url)

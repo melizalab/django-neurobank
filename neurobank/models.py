@@ -7,6 +7,7 @@ from django.contrib.postgres.fields import JSONField
 from django.db import models
 
 from neurobank.tools import random_id
+from neurobank import errors
 
 
 class Resource(models.Model):
@@ -68,7 +69,10 @@ class Location(models.Model):
         if self.archive.scheme == "neurobank":
             directory = Path(self.archive.root) / Path("resources") / \
                     Path(self.resource.name[0:2])
-            return next(directory.glob(f'{self.resource.name}.*'))
+            try:
+                return next(directory.glob(f'{self.resource.name}.*'))
+            except StopIteration:
+                raise errors.MissingFile(self.resource.name, directory)
         raise NotImplementedError
 
     def __str__(self):

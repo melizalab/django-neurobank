@@ -8,7 +8,7 @@ from rest_framework.decorators import api_view
 from rest_framework.reverse import reverse
 from django_filters import rest_framework as filters
 from drf_link_header_pagination import LinkHeaderPagination
-from sendfile import sendfile
+from django_sendfile import sendfile
 
 from neurobank import __version__, api_version
 from neurobank import models
