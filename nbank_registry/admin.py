@@ -3,7 +3,7 @@
 from __future__ import unicode_literals
 
 from django.contrib import admin
-from neurobank.models import Resource, DataType, Archive, Location
+from nbank_registry.models import Resource, DataType, Archive, Location
 
 
 class LocationInline(admin.TabularInline):

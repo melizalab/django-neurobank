@@ -7,7 +7,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('neurobank', '0003_auto_20210406_1203'),
+        ('nbank_registry', '0003_auto_20210406_1203'),
     ]
 
     operations = [

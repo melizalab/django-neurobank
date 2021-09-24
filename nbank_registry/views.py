@@ -13,9 +13,9 @@ from django_filters import rest_framework as filters
 from drf_link_header_pagination import LinkHeaderPagination
 from django_sendfile import sendfile
 
-from neurobank import __version__, api_version
-from neurobank import models
-from neurobank import serializers
+from nbank_registry import __version__, api_version
+from nbank_registry import models
+from nbank_registry import serializers
 
 
 @api_view(['GET'])

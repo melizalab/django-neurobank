@@ -2,7 +2,7 @@
 # -*- mode: python -*-
 from django.conf.urls import url
 
-from neurobank import views
+from nbank_registry import views
 
 app_name = "neurobank"
 urlpatterns = [

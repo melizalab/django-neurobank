@@ -6,7 +6,7 @@ import re
 
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator, UniqueTogetherValidator
-from neurobank.models import Resource, DataType, Archive, Location
+from nbank_registry.models import Resource, DataType, Archive, Location
 
 sha1_re = re.compile(r"[0-9a-fA-F]{40}")
 

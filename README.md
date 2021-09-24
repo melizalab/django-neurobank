@@ -18,7 +18,7 @@ This software is licensed for you to use under the Gnu Public License, version 3
 ```python
 INSTALLED_APPS = (
     ...
-    'neurobank',
+    'nbank_registry',
 )
 ```
 
@@ -28,7 +28,7 @@ Since `neurobank` uses `django-sendfile` to efficiently serve large files, you w
 3. Include the neurobank URLconf in your project urls.py like this::
 
 ```python
-url(r'^neurobank/', include(neurobank.urls')),
+url(r'^neurobank/', include(nbank_registry.urls')),
 ```
 
 4. Run `python manage.py migrate` to create the database tables.

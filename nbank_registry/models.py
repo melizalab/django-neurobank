@@ -6,8 +6,8 @@ from pathlib import Path
 from django.contrib.postgres.fields import JSONField
 from django.db import models
 
-from neurobank.tools import random_id
-from neurobank import errors
+from nbank_registry.tools import random_id
+from nbank_registry import errors
 
 
 class Resource(models.Model):

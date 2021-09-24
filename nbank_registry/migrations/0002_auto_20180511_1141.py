@@ -8,7 +8,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('neurobank', '0001_initial'),
+        ('nbank_registry', '0001_initial'),
     ]
 
     operations = [
