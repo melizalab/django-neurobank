@@ -468,17 +468,27 @@ class LocationFilterTests(APIAuthTestCase):
         SENDFILE_URL='/',
 )
 class DownloadTests(APIAuthTestCase):
-    def _create_file(self, content=b"", skip_file_creation=False):
+    def _create_file(
+            self,
+            content=b"",
+            skip_file_creation=False,
+            dtype=None,
+            archive=None,
+    ):
+        if dtype is None:
+            dtype = self.dtype
+        if archive is None:
+            archive = self.archive
         file = tempfile.NamedTemporaryFile()
         file.write(content)
         resource = Resource.objects.create(
             sha1=hashlib.sha1(content).hexdigest(),
-            dtype=self.dtype,
+            dtype=dtype,
             created_by=self.user,
             metadata={"experimenter": "dmeliza"})
         Location.objects.create(
             resource=resource,
-            archive=self.archive)
+            archive=archive)
         fs_path = ppath.join(
             self.directory.name,
             "resources",
@@ -497,7 +507,9 @@ class DownloadTests(APIAuthTestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.dtype = DataType.objects.create(
             name="spike_times",
-            content_type="application/vnd.meliza-org.pprox+json; version=1.0")
+            content_type="application/vnd.meliza-org.pprox+json; version=1.0",
+            downloadable=True,
+        )
         self.archive = Archive.objects.create(
             name="local",
             scheme="neurobank",
@@ -523,5 +535,38 @@ class DownloadTests(APIAuthTestCase):
                 skip_file_creation=True
         )
         url = reverse('neurobank:resource-download', args=[missing_resource.name])
-        with self.assertRaises(errors.MissingFile):
+        with self.assertRaises(errors.MissingFileError):
             self.client.get(url)
+
+    def test_non_downloadable_dtype(self):
+        non_downloadable_dtype = DataType.objects.create(
+            name="folder",
+        )
+        non_downloadable_resource, _ = self._create_file(
+                b"non-donwloadable",
+                dtype=non_downloadable_dtype
+        )
+
+        url = reverse('neurobank:resource-download', args=[non_downloadable_resource.name])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 415)
+
+    def test_folder_instead_of_file(self):
+        missing_resource, path = self._create_file(
+                b"missing",
+                skip_file_creation=True
+        )
+        os.makedirs(path)
+        url = reverse('neurobank:resource-download', args=[missing_resource.name])
+        with self.assertRaises(errors.NotAFileError):
+            self.client.get(url)
+
+    def test_non_neurobank_archive_scheme(self):
+        archive = Archive.objects.create(
+            name="ipfs",
+            scheme="ipfs",
+            root=self.directory.name)
+        resource, _ = self._create_file(b"bad archive", archive=archive)
+        url = reverse('neurobank:resource-download', args=[resource.name])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 415)

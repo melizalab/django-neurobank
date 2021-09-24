@@ -38,6 +38,7 @@ class DataType(models.Model):
     """A datatype has a name and an optional link to a specification"""
     name = models.SlugField(max_length=32, unique=True)
     content_type = models.CharField(max_length=128, blank=True, null=True)
+    downloadable = models.BooleanField(default=False)
 
     def __str__(self):
         return self.name
@@ -67,13 +68,20 @@ class Location(models.Model):
 
     def resolve_to_path(self):
         if self.archive.scheme == "neurobank":
-            directory = Path(self.archive.root) / Path("resources") / \
-                    Path(self.resource.name[0:2])
-            try:
-                return next(directory.glob(f'{self.resource.name}.*'))
-            except StopIteration:
-                raise errors.MissingFile(self.resource.name, directory)
+            return self._resolve_neurobank_path(self.archive, self.resource)
         raise NotImplementedError
+
+    @staticmethod
+    def _resolve_neurobank_path(archive, resource):
+        directory = Path(archive.root) / Path("resources") / \
+                Path(resource.name[0:2])
+        try:
+            path = next(directory.glob(f'{resource}.*'))
+        except StopIteration as exc:
+            raise errors.MissingFileError(resource, directory) from exc
+        if not path.is_file():
+            raise errors.NotAFileError(resource, directory)
+        return  path
 
     def __str__(self):
         return ":".join((self.archive.name, str(self.resource)))

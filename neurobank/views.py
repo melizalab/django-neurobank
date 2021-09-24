@@ -1,5 +1,8 @@
 # -*- coding: utf-8 -*-
 # -*- mode: python -*-
+from http import HTTPStatus
+
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.views.generic.detail import BaseDetailView
 from rest_framework import generics, status, permissions
@@ -128,6 +131,15 @@ class ResourceDownload(BaseDetailView):
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
 
     def render_to_response(self, context):
+        if not self.object.dtype.downloadable:
+            return HttpResponse(
+                    status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                    reason=(
+                        f"Resource '{self.object}' is of type"
+                        f" '{self.object.dtype}', which does not support"
+                        " direct downloading."
+                    )
+            )
         for location in self.object.location_set.all():
             try:
                 return sendfile(
@@ -137,7 +149,14 @@ class ResourceDownload(BaseDetailView):
                     )
             except NotImplementedError:
                 pass
-        raise NotImplementedError
+        return HttpResponse(
+                status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                reason=(
+                    f"None of the archives in which resource"
+                    f" '{self.object}' is stored support resolution"
+                    " to a path"
+                )
+        )
 
 
 class ArchiveList(generics.ListCreateAPIView):
