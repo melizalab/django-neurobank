@@ -5,6 +5,7 @@ from pathlib import Path
 
 from django.contrib.postgres.fields import JSONField
 from django.db import models
+import nbank
 
 from nbank_registry.tools import random_id
 from nbank_registry import errors
@@ -68,20 +69,20 @@ class Location(models.Model):
 
     def resolve_to_path(self):
         if self.archive.scheme == "neurobank":
-            return self._resolve_neurobank_path(self.archive, self.resource)
+            return self._resolve_neurobank_path(self)
         raise NotImplementedError
 
     @staticmethod
-    def _resolve_neurobank_path(archive, resource):
-        directory = Path(archive.root) / Path("resources") / \
-                Path(resource.name[0:2])
-        try:
-            path = next(directory.glob(f'{resource}.*'))
-        except StopIteration as exc:
-            raise errors.MissingFileError(resource, directory) from exc
-        if not path.is_file():
-            raise errors.NotAFileError(resource, directory)
-        return  path
+    def _resolve_neurobank_path(location):
+        from nbank_registry.serializers import LocationSerializer
+        serialized_location = LocationSerializer(location).data
+        path_without_ext = nbank.core.get_archive(serialized_location)
+        path = nbank.archive.find_resource(path_without_ext)
+        if path is None:
+            raise errors.MissingFileError(location.resource, path_without_ext)
+        if not Path(path).is_file():
+            raise errors.NotAFileError(location.resource, path_without_ext)
+        return path
 
     def __str__(self):
         return ":".join((self.archive.name, str(self.resource)))
