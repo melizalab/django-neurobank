@@ -1,4 +1,8 @@
-class MissingFileError(Exception):
+class NotAvailableForDownloadError(Exception):
+    pass
+
+
+class MissingFileError(NotAvailableForDownloadError):
     def __init__(self, resource, path):
         self.resource = resource
         self.path = path
@@ -10,7 +14,7 @@ class MissingFileError(Exception):
                )
 
 
-class NotAFileError(Exception):
+class NotAFileError(NotAvailableForDownloadError):
     def __init__(self, resource, path):
         self.resource = resource
         self.path = path
@@ -20,4 +24,11 @@ class NotAFileError(Exception):
                 f"Resource '{self.resource}' was found in directory"
                 f" {self.path}, but it is not a file, so it cannot be"
                 " downloaded"
+               )
+
+class SchemeNotImplementedError(NotAvailableForDownloadError):
+    def __str__(self):
+        return (
+                "The requested resource is stored in an archive that"
+                " uses a scheme that is not supported by this registry"
                )

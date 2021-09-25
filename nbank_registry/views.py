@@ -16,6 +16,7 @@ from django_sendfile import sendfile
 from nbank_registry import __version__, api_version
 from nbank_registry import models
 from nbank_registry import serializers
+from nbank_registry import errors
 
 
 @api_view(['GET'])
@@ -140,23 +141,22 @@ class ResourceDownload(BaseDetailView):
                         " direct downloading."
                     )
             )
-        for location in self.object.location_set.all():
-            try:
-                return sendfile(
-                    self.request,
-                    location.resolve_to_path(),
-                    attachment=True
+        try:
+            path = self.object.resolve_to_path()
+            return sendfile(
+                self.request,
+                path,
+                attachment=True
+            )
+        except errors.SchemeNotImplementedError:
+            return HttpResponse(
+                    status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                    reason=(
+                        f"None of the archives in which resource"
+                        f" '{self.object}' is stored support resolution"
+                        " to a path"
                     )
-            except NotImplementedError:
-                pass
-        return HttpResponse(
-                status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
-                reason=(
-                    f"None of the archives in which resource"
-                    f" '{self.object}' is stored support resolution"
-                    " to a path"
-                )
-        )
+            )
 
 
 class ArchiveList(generics.ListCreateAPIView):

@@ -31,6 +31,14 @@ class Resource(models.Model):
     def __str__(self):
         return str(self.name)
 
+    def resolve_to_path(self):
+        for location in self.location_set.all():
+            try:
+                return location.resolve_to_path()
+            except errors.SchemeNotImplementedError:
+                pass
+        raise errors.SchemeNotImplementedError()
+
     class Meta:
         ordering = ["-id"]
 
@@ -70,7 +78,7 @@ class Location(models.Model):
     def resolve_to_path(self):
         if self.archive.scheme == "neurobank":
             return self._resolve_neurobank_path(self)
-        raise NotImplementedError
+        raise errors.SchemeNotImplementedError()
 
     @staticmethod
     def _resolve_neurobank_path(location):

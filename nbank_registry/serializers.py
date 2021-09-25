@@ -4,9 +4,11 @@ from __future__ import unicode_literals
 
 import re
 
+from django.urls import reverse
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator, UniqueTogetherValidator
 from nbank_registry.models import Resource, DataType, Archive, Location
+from nbank_registry import errors
 
 sha1_re = re.compile(r"[0-9a-fA-F]{40}")
 
@@ -33,6 +35,14 @@ class ResourceSerializer(serializers.ModelSerializer):
             'invalid': 'invalid archive name'})
     created_by = serializers.ReadOnlyField(source='created_by.username')
     metadata = serializers.JSONField(required=False)
+    download_url = serializers.SerializerMethodField(required=False)
+
+    def get_download_url(self, obj):
+        try:
+            obj.resolve_to_path()
+            return reverse('neurobank:resource-download', args=[obj])
+        except errors.NotAvailableForDownloadError:
+            return None
 
     def validate_sha1(self, value):
         if self.instance is not None and self.instance.sha1 != value:
@@ -49,7 +59,7 @@ class ResourceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Resource
         fields = ('name', 'sha1', 'dtype', 'metadata', 'locations',
-                  'created_by', 'created_on')
+                  'created_by', 'created_on', 'download_url')
 
     def create(self, validated_data):
         archives = validated_data.pop('locations', [])
@@ -76,6 +86,12 @@ class ResourceSerializer(serializers.ModelSerializer):
                 instance.metadata.pop(key, None)
         instance.save()
         return instance
+
+    def to_representation(self, instance):
+        ret = super().to_representation(instance)
+        if ret['download_url'] is None:
+            del ret['download_url']
+        return ret
 
 
 class DataTypeSerializer(serializers.ModelSerializer):
