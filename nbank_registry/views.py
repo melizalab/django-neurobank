@@ -132,15 +132,6 @@ class ResourceDownload(BaseDetailView):
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
 
     def render_to_response(self, context):
-        if not self.object.dtype.downloadable:
-            return HttpResponse(
-                    status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
-                    reason=(
-                        f"Resource '{self.object}' is of type"
-                        f" '{self.object.dtype}', which does not support"
-                        " direct downloading."
-                    )
-            )
         try:
             path = self.object.resolve_to_path()
             return sendfile(
@@ -155,6 +146,15 @@ class ResourceDownload(BaseDetailView):
                         f"None of the archives in which resource"
                         f" '{self.object}' is stored support resolution"
                         " to a path"
+                    )
+            )
+        except errors.NonDownloadableDtypeError:
+            return HttpResponse(
+                    status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                    reason=(
+                        f"Resource '{self.object}' is of type"
+                        f" '{self.object.dtype}', which does not support"
+                        " direct downloading."
                     )
             )
 

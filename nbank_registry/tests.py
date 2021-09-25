@@ -537,6 +537,10 @@ class DownloadTests(APIAuthTestCase):
         url = reverse('neurobank:resource-download', args=[missing_resource])
         with self.assertRaises(errors.MissingFileError):
             self.client.get(url)
+        url = reverse('neurobank:resource', args=[missing_resource])
+        response = self.client.get(url)
+        self.assertNotIn('download_url', response.data)
+
 
     def test_non_downloadable_dtype(self):
         non_downloadable_dtype = DataType.objects.create(
@@ -550,6 +554,9 @@ class DownloadTests(APIAuthTestCase):
         url = reverse('neurobank:resource-download', args=[non_downloadable_resource])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 415)
+        url = reverse('neurobank:resource', args=[non_downloadable_resource])
+        response = self.client.get(url)
+        self.assertNotIn('download_url', response.data)
 
     def test_folder_instead_of_file(self):
         missing_resource, path = self._create_file(
@@ -574,6 +581,10 @@ class DownloadTests(APIAuthTestCase):
         url = reverse('neurobank:resource-download', args=[resource])
         response = self.client.get(url)
         self.assertEqual(response.status_code, 415)
+        url = reverse('neurobank:resource', args=[resource])
+        response = self.client.get(url)
+        self.assertNotIn('download_url', response.data)
+
 
     def test_model_view_has_correct_url(self):
         url = reverse('neurobank:resource', args=[self.resource])

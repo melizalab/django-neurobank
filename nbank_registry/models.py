@@ -32,6 +32,8 @@ class Resource(models.Model):
         return str(self.name)
 
     def resolve_to_path(self):
+        if not self.dtype.downloadable:
+            raise errors.NonDownloadableDtypeError()
         for location in self.location_set.all():
             try:
                 return location.resolve_to_path()

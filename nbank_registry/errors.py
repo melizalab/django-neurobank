@@ -32,3 +32,8 @@ class SchemeNotImplementedError(NotAvailableForDownloadError):
                 "The requested resource is stored in an archive that"
                 " uses a scheme that is not supported by this registry"
                )
+
+
+class NonDownloadableDtypeError(NotAvailableForDownloadError):
+    def __str__(self):
+        return "The resource is not of a downloadable datatype"
