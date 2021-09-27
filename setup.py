@@ -6,7 +6,7 @@ if sys.hexversion < 0x02060000:
     raise RuntimeError("Python 2.6 or higher required")
 from setuptools import setup
 
-from neurobank import __version__
+from nbank_registry import __version__
 
 VERSION = __version__
 cls_txt = """
@@ -30,6 +30,6 @@ setup(
     author='C Daniel Meliza',
     maintainer='C Daniel Meliza',
     url="https://github.com/melizalab/django-neurobank",
-    packages=['neurobank'],
+    packages=['nbank_registry'],
     include_package_data=True,
 )

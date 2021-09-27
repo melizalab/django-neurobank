@@ -1,16 +1,22 @@
 # -*- coding: utf-8 -*-
 # -*- mode: python -*-
+from http import HTTPStatus
+
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.views.generic.detail import BaseDetailView
 from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from rest_framework.reverse import reverse
 from django_filters import rest_framework as filters
 from drf_link_header_pagination import LinkHeaderPagination
+from django_sendfile import sendfile
 
-from neurobank import __version__, api_version
-from neurobank import models
-from neurobank import serializers
+from nbank_registry import __version__, api_version
+from nbank_registry import models
+from nbank_registry import serializers
+from nbank_registry import errors
 
 
 @api_view(['GET'])
@@ -117,6 +123,40 @@ class ResourceDetail(generics.RetrieveUpdateAPIView):
     queryset = models.Resource.objects.all()
     serializer_class = serializers.ResourceSerializer
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
+
+
+class ResourceDownload(BaseDetailView):
+    slug_url_kwarg = "name"
+    slug_field = "name"
+    model = models.Resource
+    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
+
+    def render_to_response(self, context):
+        try:
+            path = self.object.resolve_to_path()
+            return sendfile(
+                self.request,
+                path,
+                attachment=True
+            )
+        except errors.SchemeNotImplementedError:
+            return HttpResponse(
+                    status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                    reason=(
+                        f"None of the archives in which resource"
+                        f" '{self.object}' is stored support resolution"
+                        " to a path"
+                    )
+            )
+        except errors.NonDownloadableDtypeError:
+            return HttpResponse(
+                    status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                    reason=(
+                        f"Resource '{self.object}' is of type"
+                        f" '{self.object.dtype}', which does not support"
+                        " direct downloading."
+                    )
+            )
 
 
 class ArchiveList(generics.ListCreateAPIView):

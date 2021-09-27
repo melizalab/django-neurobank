@@ -7,7 +7,7 @@ from django.conf import settings
 import django.contrib.postgres.fields.hstore
 from django.db import migrations, models
 import django.db.models.deletion
-import neurobank.tools
+import nbank_registry.tools
 
 
 class Migration(migrations.Migration):
@@ -41,26 +41,26 @@ class Migration(migrations.Migration):
             name='Location',
             fields=[
                 ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('domain', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='neurobank.Domain')),
+                ('domain', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='nbank_registry.Domain')),
             ],
         ),
         migrations.CreateModel(
             name='Resource',
             fields=[
                 ('id', models.AutoField(primary_key=True, serialize=False)),
-                ('name', models.SlugField(default=neurobank.tools.random_id, max_length=64, unique=True)),
+                ('name', models.SlugField(default=nbank_registry.tools.random_id, max_length=64, unique=True)),
                 ('sha1', models.CharField(blank=True, help_text='specify only for resources whose contents must not change (i.e., sources)', max_length=40, null=True, unique=True)),
                 ('created_on', models.DateTimeField(auto_now_add=True)),
                 ('metadata', django.contrib.postgres.fields.hstore.HStoreField(blank=True, null=True)),
                 ('created_by', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='resources', to=settings.AUTH_USER_MODEL)),
-                ('dtype', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='neurobank.DataType')),
-                ('locations', models.ManyToManyField(through='neurobank.Location', to='neurobank.Domain')),
+                ('dtype', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='nbank_registry.DataType')),
+                ('locations', models.ManyToManyField(through='nbank_registry.Location', to='nbank_registry.Domain')),
             ],
         ),
         migrations.AddField(
             model_name='location',
             name='resource',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='neurobank.Resource'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='nbank_registry.Resource'),
         ),
         migrations.AlterUniqueTogether(
             name='domain',

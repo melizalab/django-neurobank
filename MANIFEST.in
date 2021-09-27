@@ -1,4 +1,4 @@
 include README.md
 include COPYING
-recursive-include neurobank/migrations *.py
+recursive-include nbank_registry/migrations *.py
 recursive-include docs *

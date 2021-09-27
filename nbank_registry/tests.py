@@ -1,15 +1,19 @@
 # -*- coding: utf-8 -*-
 # -*- mode: python -*-
 import hashlib
+import os
+import tempfile
 import uuid
 import posixpath as ppath
 
 from django.urls import reverse
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from django.contrib.auth.models import User
-from neurobank.models import Resource, DataType, Archive, Location
+from nbank_registry.models import Resource, DataType, Archive, Location
+from nbank_registry import errors
 
 
 class APIAuthTestCase(APITestCase):
@@ -108,10 +112,10 @@ class ResourceTests(APIAuthTestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_can_access_resource_detail(self):
-        response = self.client.get(reverse('neurobank:resource', args=[self.resource.name]))
+        response = self.client.get(reverse('neurobank:resource', args=[self.resource]))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertDictContainsSubset({
-            "name": str(self.resource.name),
+            "name": str(self.resource),
             "sha1": self.resource.sha1,
             "dtype": self.dtype.name,
             "created_by": self.user.username,
@@ -129,24 +133,24 @@ class ResourceTests(APIAuthTestCase):
 
     def test_cannot_delete_resource(self):
         self.login()
-        response = self.client.delete(reverse('neurobank:resource', args=[self.resource.name]))
+        response = self.client.delete(reverse('neurobank:resource', args=[self.resource]))
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
     def test_cannot_modify_name(self):
         self.login()
-        response = self.client.patch(reverse('neurobank:resource', args=[self.resource.name]),
+        response = self.client.patch(reverse('neurobank:resource', args=[self.resource]),
                                      {"name": str(uuid.uuid4())})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_cannot_modify_sha1(self):
         self.login()
-        response = self.client.patch(reverse('neurobank:resource', args=[self.resource.name]),
+        response = self.client.patch(reverse('neurobank:resource', args=[self.resource]),
                                      {"sha1": hashlib.sha1(b"blah").hexdigest()})
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_can_update_metadata(self):
         self.login()
-        response = self.client.patch(reverse('neurobank:resource', args=[self.resource.name]),
+        response = self.client.patch(reverse('neurobank:resource', args=[self.resource]),
                                      {"metadata": {"test_field": "value"}}, format="json")
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertDictContainsSubset({"test_field": "value"}, response.data["metadata"])
@@ -171,7 +175,7 @@ class LocationTests(APIAuthTestCase):
             metadata={"experimenter": "dmeliza"})
 
     def test_can_add_and_delete_location(self):
-        url = reverse('neurobank:location-list', args=[self.resource.name])
+        url = reverse('neurobank:location-list', args=[self.resource])
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data, [])
@@ -188,7 +192,7 @@ class LocationTests(APIAuthTestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
         response = self.client.delete(reverse("neurobank:location",
-                                              args=[self.resource.name, self.archive.name]))
+                                              args=[self.resource.name, self.archive]))
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
 
         response = self.client.get(url)
@@ -209,7 +213,7 @@ class DataTypeTests(APIAuthTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_can_access_datatype_detail(self):
-        response = self.client.get(reverse("neurobank:datatype", args=[self.dtype.name]))
+        response = self.client.get(reverse("neurobank:datatype", args=[self.dtype]))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data,
                          {"name": self.dtype.name,
@@ -233,12 +237,12 @@ class DataTypeTests(APIAuthTestCase):
 
     def test_cannot_delete_datatype(self):
         self.login()
-        response = self.client.delete(reverse("neurobank:datatype", args=[self.dtype.name]))
+        response = self.client.delete(reverse("neurobank:datatype", args=[self.dtype]))
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
     def test_cannot_modify_datatype(self):
         self.login()
-        response = self.client.patch(reverse("neurobank:datatype", args=[self.dtype.name]),
+        response = self.client.patch(reverse("neurobank:datatype", args=[self.dtype]),
                                      {"name": "blahblahblah"})
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
@@ -257,7 +261,7 @@ class ArchiveTests(APIAuthTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
     def test_can_access_archive_detail(self):
-        response = self.client.get(reverse("neurobank:archive", args=[self.archive.name]))
+        response = self.client.get(reverse("neurobank:archive", args=[self.archive]))
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data,
                          {"name": self.archive.name,
@@ -299,12 +303,12 @@ class ArchiveTests(APIAuthTestCase):
 
     def test_cannot_delete_archive(self):
         self.login()
-        response = self.client.delete(reverse("neurobank:archive", args=[self.archive.name]))
+        response = self.client.delete(reverse("neurobank:archive", args=[self.archive]))
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
 
     def test_can_modify_archive(self):
         self.login()
-        response = self.client.patch(reverse("neurobank:archive", args=[self.archive.name]),
+        response = self.client.patch(reverse("neurobank:archive", args=[self.archive]),
                                      {"name": "local_intrac"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
 
@@ -374,24 +378,24 @@ class ResourceFilterTests(APIAuthTestCase):
 
     def test_can_filter_by_name(self):
         response = self.client.get(reverse('neurobank:resource-list'),
-                                   {"name": str(self.resource1.name)[:6]})
+                                   {"name": str(self.resource1)[:6]})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["name"], str(self.resource1.name))
+        self.assertEqual(response.data[0]["name"], str(self.resource1))
 
     def test_can_filter_by_sha1(self):
         response = self.client.get(reverse('neurobank:resource-list'),
                                    {"sha1": str(self.resource1.sha1)[:6]})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["name"], str(self.resource1.name))
+        self.assertEqual(response.data[0]["name"], str(self.resource1))
 
     def test_can_filter_by_dtype(self):
         response = self.client.get(reverse('neurobank:resource-list'),
                                    {"dtype": self.dtype1.name})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["name"], str(self.resource1.name))
+        self.assertEqual(response.data[0]["name"], str(self.resource1))
 
     def test_can_filter_by_user(self):
         response = self.client.get(reverse('neurobank:resource-list'),
@@ -416,7 +420,7 @@ class ResourceFilterTests(APIAuthTestCase):
                                    {"metadata__experimenter": "mcb2x"})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["name"], str(self.resource2.name))
+        self.assertEqual(response.data[0]["name"], str(self.resource2))
 
 
 class LocationFilterTests(APIAuthTestCase):
@@ -447,13 +451,145 @@ class LocationFilterTests(APIAuthTestCase):
             archive=self.archive_remote)
 
     def test_can_filter_by_name(self):
-        url = reverse('neurobank:location-list', args=[self.resource.name])
+        url = reverse('neurobank:location-list', args=[self.resource])
         response = self.client.get(url, {"name": self.archive_local.name[:4]})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
 
     def test_can_filter_by_scheme(self):
-        url = reverse('neurobank:location-list', args=[self.resource.name])
+        url = reverse('neurobank:location-list', args=[self.resource])
         response = self.client.get(url, {"scheme": self.archive_remote.scheme})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
+
+@override_settings(
+        SENDFILE_BACKEND="sendfile.backends.nginx",
+        SENDFILE_ROOT='/',
+        SENDFILE_URL='/',
+)
+class DownloadTests(APIAuthTestCase):
+    def _create_file(
+            self,
+            content=b"",
+            skip_file_creation=False,
+            dtype=None,
+            archive=None,
+    ):
+        if dtype is None:
+            dtype = self.dtype
+        if archive is None:
+            archive = self.archive
+        file = tempfile.NamedTemporaryFile()
+        file.write(content)
+        resource = Resource.objects.create(
+            sha1=hashlib.sha1(content).hexdigest(),
+            dtype=dtype,
+            created_by=self.user,
+            metadata={"experimenter": "dmeliza"})
+        Location.objects.create(
+            resource=resource,
+            archive=archive)
+        fs_path = ppath.join(
+            self.directory.name,
+            "resources",
+            resource.name[0:2],
+            resource.name+".bin"
+        )
+        if not skip_file_creation:
+            os.makedirs(os.path.dirname(fs_path), exist_ok=True)
+            with open(fs_path, "wb") as f:
+                f.write(file.read())
+        return resource, fs_path
+
+
+    def setUp(self):
+        super(DownloadTests, self).setUp()
+        self.directory = tempfile.TemporaryDirectory()
+        self.dtype = DataType.objects.create(
+            name="spike_times",
+            content_type="application/vnd.meliza-org.pprox+json; version=1.0",
+            downloadable=True,
+        )
+        self.archive = Archive.objects.create(
+            name="local",
+            scheme="neurobank",
+            root=self.directory.name)
+        self.resource, self.fs_path = self._create_file()
+
+    def tearDown(self):
+        super(DownloadTests, self).tearDown()
+        self.directory.cleanup()
+
+    def test_nginx_header(self):
+        url = reverse('neurobank:resource-download', args=[self.resource])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(ppath.samefile(
+            response['X-Accel-Redirect'],
+            self.fs_path,
+        ))
+
+    def test_missing_file(self):
+        missing_resource, _ = self._create_file(
+                b"missing",
+                skip_file_creation=True
+        )
+        url = reverse('neurobank:resource-download', args=[missing_resource])
+        with self.assertRaises(errors.MissingFileError):
+            self.client.get(url)
+        url = reverse('neurobank:resource', args=[missing_resource])
+        response = self.client.get(url)
+        self.assertNotIn('download_url', response.data)
+
+
+    def test_non_downloadable_dtype(self):
+        non_downloadable_dtype = DataType.objects.create(
+            name="folder",
+        )
+        non_downloadable_resource, _ = self._create_file(
+                b"non-donwloadable",
+                dtype=non_downloadable_dtype
+        )
+
+        url = reverse('neurobank:resource-download', args=[non_downloadable_resource])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 415)
+        url = reverse('neurobank:resource', args=[non_downloadable_resource])
+        response = self.client.get(url)
+        self.assertNotIn('download_url', response.data)
+
+    def test_folder_instead_of_file(self):
+        missing_resource, path = self._create_file(
+                b"missing",
+                skip_file_creation=True
+        )
+        os.makedirs(path)
+        url = reverse('neurobank:resource-download', args=[missing_resource])
+        with self.assertRaises(errors.NotAFileError):
+            self.client.get(url)
+        url = reverse('neurobank:resource', args=[missing_resource])
+        response = self.client.get(url)
+        self.assertNotIn('download_url', response.data)
+
+
+    def test_non_neurobank_archive_scheme(self):
+        archive = Archive.objects.create(
+            name="ipfs",
+            scheme="ipfs",
+            root=self.directory.name)
+        resource, _ = self._create_file(b"bad archive", archive=archive)
+        url = reverse('neurobank:resource-download', args=[resource])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 415)
+        url = reverse('neurobank:resource', args=[resource])
+        response = self.client.get(url)
+        self.assertNotIn('download_url', response.data)
+
+
+    def test_model_view_has_correct_url(self):
+        url = reverse('neurobank:resource', args=[self.resource])
+        response = self.client.get(url)
+        self.assertEqual(
+                response.data['download_url'],
+                reverse('neurobank:resource-download', args=[self.resource])
+        )

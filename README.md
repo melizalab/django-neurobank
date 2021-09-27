@@ -13,26 +13,27 @@ This software is licensed for you to use under the Gnu Public License, version 3
 
 1. Install the package from source: `python setup.py install`. Worth putting in a virtualenv.
 
-1. Add `neurobank` to your INSTALLED_APPS setting like this:
+2. Add `neurobank` to your INSTALLED_APPS setting like this:
 
 ```python
 INSTALLED_APPS = (
     ...
-    'neurobank',
+    'nbank_registry',
 )
 ```
 
 You'll also need to add `rest_framework` and `django_filters`.
+Since `neurobank` uses `django-sendfile` to efficiently serve large files, you will need to set `settings.SENDFILE_BACKEND` and possibly other keys, depending on which reverse proxy you are using. Consult [the documentation for django-sendfile](https://github.com/johnsensible/django-sendfile/blob/master/README.rst) for details.
 
-2. Include the neurobank URLconf in your project urls.py like this::
+3. Include the neurobank URLconf in your project urls.py like this::
 
 ```python
-url(r'^neurobank/', include(neurobank.urls')),
+url(r'^neurobank/', include(nbank_registry.urls')),
 ```
 
-3. Run `python manage.py migrate` to create the database tables.
+4. Run `python manage.py migrate` to create the database tables.
 
-4. Start the development server and point your browser to http://127.0.0.1:8000/neurobank/
+5. Start the development server and point your browser to http://127.0.0.1:8000/neurobank/
    to view records and inspect the API.
 
 ### Using the registry
