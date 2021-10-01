@@ -40,7 +40,8 @@ class ResourceSerializer(serializers.ModelSerializer):
     def get_download_url(self, obj):
         try:
             obj.resolve_to_path()
-            return reverse('neurobank:resource-download', args=[obj])
+            path = reverse('neurobank:resource-download', args=[obj])
+            return self.context['request'].build_absolute_uri(path)
         except errors.NotAvailableForDownloadError:
             return None
 

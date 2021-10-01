@@ -589,7 +589,9 @@ class DownloadTests(APIAuthTestCase):
     def test_model_view_has_correct_url(self):
         url = reverse('neurobank:resource', args=[self.resource])
         response = self.client.get(url)
+        path = reverse('neurobank:resource-download', args=[self.resource])
+        download_url = 'http://testserver' + path
         self.assertEqual(
                 response.data['download_url'],
-                reverse('neurobank:resource-download', args=[self.resource])
+                download_url
         )

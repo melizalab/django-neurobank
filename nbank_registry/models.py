@@ -5,7 +5,6 @@ from pathlib import Path
 
 from django.contrib.postgres.fields import JSONField
 from django.db import models
-import nbank
 
 from nbank_registry.tools import random_id
 from nbank_registry import errors
@@ -84,6 +83,7 @@ class Location(models.Model):
 
     @staticmethod
     def _resolve_neurobank_path(location):
+        import nbank
         from nbank_registry.serializers import LocationSerializer
         serialized_location = LocationSerializer(location).data
         path_without_ext = nbank.core.get_archive(serialized_location)
