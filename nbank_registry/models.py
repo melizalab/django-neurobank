@@ -3,7 +3,6 @@
 from __future__ import unicode_literals
 from pathlib import Path
 
-from django.contrib.postgres.fields import JSONField
 from django.db import models
 
 from nbank_registry.tools import random_id
@@ -25,7 +24,7 @@ class Resource(models.Model):
     created_by = models.ForeignKey('auth.User',
                               related_name='resources',
                               on_delete=models.CASCADE)
-    metadata = JSONField(blank=True, null=True)
+    metadata = models.JSONField(blank=True, null=True)
 
     def __str__(self):
         return str(self.name)
@@ -46,6 +45,7 @@ class Resource(models.Model):
 
 class DataType(models.Model):
     """A datatype has a name and an optional link to a specification"""
+    id = models.AutoField(primary_key=True)
     name = models.SlugField(max_length=32, unique=True)
     content_type = models.CharField(max_length=128, blank=True, null=True)
     downloadable = models.BooleanField(default=False)
@@ -59,6 +59,7 @@ class DataType(models.Model):
 
 class Archive(models.Model):
     """An archive defines a method and authority for locating a resource"""
+    id = models.AutoField(primary_key=True)
     name = models.SlugField(max_length=32, unique=True, help_text="a descriptive name")
     scheme = models.CharField(max_length=16)
     root = models.CharField(max_length=512, help_text="root path for resources")
@@ -73,6 +74,7 @@ class Archive(models.Model):
 
 class Location(models.Model):
     """A location consists of a resource and an archive"""
+    id = models.AutoField(primary_key=True)
     resource = models.ForeignKey("Resource", on_delete=models.CASCADE)
     archive = models.ForeignKey("Archive", on_delete=models.CASCADE)
 
