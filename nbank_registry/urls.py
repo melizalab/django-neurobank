@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # -*- mode: python -*-
-from django.conf.urls import re_path
+from django.urls import re_path
 
 from nbank_registry import views
 
