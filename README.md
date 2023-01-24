@@ -7,11 +7,13 @@ The data management strategy behind **neurobank** is simple: every resource gets
 
 To use this strategy, you need to be able to do two things: register each resource you create somewhere, and then resolve resource names to locations so that you can access your data. Being able to attach searchable metadata to your resources is pretty handy, too. This software provides a backend for these tasks. You'll also need [neurobank](https://github.com/melizalab/neurobank) or some other client software to take care of storing your files.
 
-This software is licensed for you to use under the Gnu Public License, version 3. See COPYING for details
+This software is licensed for you to use under the BSD License. See COPYING for details
 
 ### Quick start
 
-1. Install the package from source: `python setup.py install`. Worth putting in a virtualenv.
+1. Requires Python 3.8+ and Django 4.0+
+
+1. Install the package: `pip install django-neurobank`
 
 2. Add `neurobank` to your INSTALLED_APPS setting like this:
 
