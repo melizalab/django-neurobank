@@ -6,48 +6,65 @@ import re
 
 from django.urls import reverse
 from rest_framework import serializers
-from rest_framework.validators import UniqueValidator, UniqueTogetherValidator
-from nbank_registry.models import Resource, DataType, Archive, Location
+from rest_framework.validators import UniqueTogetherValidator, UniqueValidator
+
 from nbank_registry import errors
+from nbank_registry.models import Archive, DataType, Location, Resource
 
 sha1_re = re.compile(r"[0-9a-fA-F]{40}")
 
 
 class SlugField(serializers.SlugField):
-    default_error_messages = {"invalid":
-                              "can only contain letters, numbers, underscores, and hyphens"}
+    default_error_messages = {
+        "invalid": "can only contain letters, numbers, underscores, and hyphens"
+    }
 
 
 class ResourceSerializer(serializers.ModelSerializer):
-    name = SlugField(required=False,
-                     validators=[UniqueValidator(queryset=Resource.objects.all(),
-                                                 message="a resource with this name already exists")])
+    name = SlugField(
+        required=False,
+        validators=[
+            UniqueValidator(
+                queryset=Resource.objects.all(),
+                message="a resource with this name already exists",
+            )
+        ],
+    )
     dtype = serializers.SlugRelatedField(
-        queryset=DataType.objects.all(), slug_field='name',
+        queryset=DataType.objects.all(),
+        slug_field="name",
         error_messages={
-            'does_not_exist': "no such dtype '{value}'",
-            'invalid': 'invalid dtype name'})
+            "does_not_exist": "no such dtype '{value}'",
+            "invalid": "invalid dtype name",
+        },
+    )
     locations = serializers.SlugRelatedField(
-        queryset=Archive.objects.all(), required=False,
-        many=True, slug_field='name',
+        queryset=Archive.objects.all(),
+        required=False,
+        many=True,
+        slug_field="name",
         error_messages={
-            'does_not_exist': "no such archive '{value}'",
-            'invalid': 'invalid archive name'})
-    created_by = serializers.ReadOnlyField(source='created_by.username')
+            "does_not_exist": "no such archive '{value}'",
+            "invalid": "invalid archive name",
+        },
+    )
+    created_by = serializers.ReadOnlyField(source="created_by.username")
     metadata = serializers.JSONField(required=False)
     download_url = serializers.SerializerMethodField(required=False)
 
     def get_download_url(self, obj):
         try:
             obj.resolve_to_path()
-            path = reverse('neurobank:resource-download', args=[obj])
-            return self.context['request'].build_absolute_uri(path)
+            path = reverse("neurobank:resource-download", args=[obj])
+            return self.context["request"].build_absolute_uri(path)
         except errors.NotAvailableForDownloadError:
             return None
 
     def validate_sha1(self, value):
         if self.instance is not None and self.instance.sha1 != value:
-            raise serializers.ValidationError("sha1 value cannot be updated; create a new resource")
+            raise serializers.ValidationError(
+                "sha1 value cannot be updated; create a new resource"
+            )
         if value is not None and sha1_re.match(value) is None:
             raise serializers.ValidationError("invalid sha1 value")
         return value
@@ -59,11 +76,19 @@ class ResourceSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Resource
-        fields = ('name', 'sha1', 'dtype', 'metadata', 'locations',
-                  'created_by', 'created_on', 'download_url')
+        fields = (
+            "name",
+            "sha1",
+            "dtype",
+            "metadata",
+            "locations",
+            "created_by",
+            "created_on",
+            "download_url",
+        )
 
     def create(self, validated_data):
-        archives = validated_data.pop('locations', [])
+        archives = validated_data.pop("locations", [])
         resource = Resource.objects.create(**validated_data)
         for archive in archives:
             Location.objects.create(resource=resource, archive=archive)
@@ -75,12 +100,12 @@ class ResourceSerializer(serializers.ModelSerializer):
         For the metadata field, any sub-fields not in the supplied data are
         retained. To delete a subfield, set it to None
         """
-        archives = validated_data.pop('locations', [])
+        archives = validated_data.pop("locations", [])
         for archive in archives:
             if archive not in instance.locations:
                 Location.objects.create(resource=resource, archive=archive)
-        instance.dtype = validated_data.get('dtype', instance.dtype)
-        for key, value in validated_data.get('metadata', {}).items():
+        instance.dtype = validated_data.get("dtype", instance.dtype)
+        for key, value in validated_data.get("metadata", {}).items():
             if value is not None:
                 instance.metadata[key] = value
             else:
@@ -90,27 +115,39 @@ class ResourceSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         ret = super().to_representation(instance)
-        if ret['download_url'] is None:
-            del ret['download_url']
+        if ret["download_url"] is None:
+            del ret["download_url"]
         return ret
 
 
 class DataTypeSerializer(serializers.ModelSerializer):
-    name = SlugField(validators=[UniqueValidator(queryset=DataType.objects.all(),
-                                                 message="a dtype with this name already exists")])
+    name = SlugField(
+        validators=[
+            UniqueValidator(
+                queryset=DataType.objects.all(),
+                message="a dtype with this name already exists",
+            )
+        ]
+    )
 
     class Meta:
         model = DataType
-        fields = ('name', 'content_type')
+        fields = ("name", "content_type")
 
 
 class ArchiveSerializer(serializers.ModelSerializer):
-    name = SlugField(validators=[UniqueValidator(queryset=Archive.objects.all(),
-                                                 message="an archive with this name already exists")])
+    name = SlugField(
+        validators=[
+            UniqueValidator(
+                queryset=Archive.objects.all(),
+                message="an archive with this name already exists",
+            )
+        ]
+    )
 
     class Meta:
         model = Archive
-        fields = ('name', 'scheme', 'root')
+        fields = ("name", "scheme", "root")
 
 
 class LocationSerializer(serializers.ModelSerializer):
@@ -119,21 +156,28 @@ class LocationSerializer(serializers.ModelSerializer):
         queryset=Archive.objects.all(),
         slug_field="name",
         error_messages={
-            'does_not_exist': "no such archive '{value}'",
-            'invalid': 'invalid archive name'})
+            "does_not_exist": "no such archive '{value}'",
+            "invalid": "invalid archive name",
+        },
+    )
     resource_name = serializers.SlugRelatedField(
         source="resource",
         queryset=Resource.objects.all(),
         slug_field="name",
         error_messages={
-            'does_not_exist': "no such resource '{value}'",
-            'invalid': 'invalid resource name'})
+            "does_not_exist": "no such resource '{value}'",
+            "invalid": "invalid resource name",
+        },
+    )
     scheme = serializers.ReadOnlyField(source="archive.scheme")
     root = serializers.ReadOnlyField(source="archive.root")
 
     class Meta:
         model = Location
-        fields = ('archive_name', 'scheme', 'root', 'resource_name')
+        fields = ("archive_name", "scheme", "root", "resource_name")
         validators = [
-            UniqueTogetherValidator(queryset=Location.objects.all(), fields=('resource_name', 'archive_name'))
+            UniqueTogetherValidator(
+                queryset=Location.objects.all(),
+                fields=("resource_name", "archive_name"),
+            )
         ]

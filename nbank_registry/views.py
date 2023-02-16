@@ -5,42 +5,45 @@ from http import HTTPStatus
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.views.generic.detail import BaseDetailView
-from rest_framework import generics, status, permissions
-from rest_framework.response import Response
-from rest_framework.decorators import api_view
-from rest_framework.reverse import reverse
 from django_filters import rest_framework as filters
-from drf_link_header_pagination import LinkHeaderPagination
 from django_sendfile import sendfile
+from drf_link_header_pagination import LinkHeaderPagination
+from rest_framework import generics, permissions, status
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework.reverse import reverse
 
-from nbank_registry import __version__, api_version
-from nbank_registry import models
-from nbank_registry import serializers
-from nbank_registry import errors
+from nbank_registry import __version__, api_version, errors, models, serializers
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 def api_root(request, format=None):
-    return Response({
-        'info': reverse('neurobank:api-info', request=request, format=format),
-        'resources': reverse('neurobank:resource-list', request=request, format=format),
-        'datatypes': reverse('neurobank:datatype-list', request=request, format=format),
-        'archives': reverse('neurobank:archive-list', request=request, format=format)
-    })
+    return Response(
+        {
+            "info": reverse("neurobank:api-info", request=request, format=format),
+            "resources": reverse(
+                "neurobank:resource-list", request=request, format=format
+            ),
+            "datatypes": reverse(
+                "neurobank:datatype-list", request=request, format=format
+            ),
+            "archives": reverse(
+                "neurobank:archive-list", request=request, format=format
+            ),
+        }
+    )
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 def notfound(request, format=None):
-    return Response({'detail': 'not found'}, status=status.HTTP_404_NOT_FOUND)
+    return Response({"detail": "not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 def api_info(request, format=None):
-    return Response({
-        'name': 'django-neurobank',
-        'version': __version__,
-        'api_version': api_version
-    })
+    return Response(
+        {"name": "django-neurobank", "version": __version__, "api_version": api_version}
+    )
 
 
 class ArchiveFilter(filters.FilterSet):
@@ -58,13 +61,17 @@ class ResourceFilter(filters.FilterSet):
     sha1 = filters.CharFilter(field_name="sha1", lookup_expr="icontains")
     dtype = filters.CharFilter(field_name="dtype__name", lookup_expr="icontains")
     location = filters.CharFilter(field_name="locations__name", lookup_expr="icontains")
-    created_by = filters.CharFilter(field_name="created_by__username", lookup_expr="icontains")
-    scheme = filters.CharFilter(field_name="locations__scheme", lookup_expr="istartswith")
+    created_by = filters.CharFilter(
+        field_name="created_by__username", lookup_expr="icontains"
+    )
+    scheme = filters.CharFilter(
+        field_name="locations__scheme", lookup_expr="istartswith"
+    )
 
     class Meta:
         model = models.Resource
         fields = {
-            'created_on': ['exact', 'year', 'range'],
+            "created_on": ["exact", "year", "range"],
         }
 
 
@@ -134,28 +141,24 @@ class ResourceDownload(BaseDetailView):
     def render_to_response(self, context):
         try:
             path = self.object.resolve_to_path()
-            return sendfile(
-                self.request,
-                path,
-                attachment=True
-            )
+            return sendfile(self.request, path, attachment=True)
         except errors.SchemeNotImplementedError:
             return HttpResponse(
-                    status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
-                    reason=(
-                        f"None of the archives in which resource"
-                        f" '{self.object}' is stored support resolution"
-                        " to a path"
-                    )
+                status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                reason=(
+                    f"None of the archives in which resource"
+                    f" '{self.object}' is stored support resolution"
+                    " to a path"
+                ),
             )
         except errors.NonDownloadableDtypeError:
             return HttpResponse(
-                    status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
-                    reason=(
-                        f"Resource '{self.object}' is of type"
-                        f" '{self.object.dtype}', which does not support"
-                        " direct downloading."
-                    )
+                status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+                reason=(
+                    f"Resource '{self.object}' is of type"
+                    f" '{self.object.dtype}', which does not support"
+                    " direct downloading."
+                ),
             )
 
 
@@ -190,7 +193,8 @@ class DataTypeDetail(generics.RetrieveAPIView):
 
 
 class LocationList(generics.ListAPIView):
-    """List locations for a specific resource """
+    """List locations for a specific resource"""
+
     queryset = models.Location.objects.all()
     serializer_class = serializers.LocationSerializer
     filter_backends = (filters.DjangoFilterBackend,)
@@ -202,11 +206,14 @@ class LocationList(generics.ListAPIView):
 
     def get_queryset(self):
         resource = self.get_object()
-        return resource.location_set.all()
+        locations = resource.location_set.all()
+        return locations
 
     def post(self, request, *args, **kwargs):
-        data = {"archive_name": request.data["archive_name"],
-                "resource_name": kwargs["resource_name"]}
+        data = {
+            "archive_name": request.data["archive_name"],
+            "resource_name": kwargs["resource_name"],
+        }
         serializer = serializers.LocationSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
@@ -221,7 +228,8 @@ class LocationDetail(generics.RetrieveDestroyAPIView):
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
 
     def get_object(self):
-        return get_object_or_404(models.Location,
-                                 resource__name=self.kwargs["resource_name"],
-                                 archive__name=self.kwargs["archive_pk"]
+        return get_object_or_404(
+            models.Location,
+            resource__name=self.kwargs["resource_name"],
+            archive__name=self.kwargs["archive_pk"],
         )
