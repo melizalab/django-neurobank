@@ -40,10 +40,12 @@ urlpatterns = [
         name="location",
     ),
     re_path(
-        r"^download/(?P<name>[\w-]+)/",
+        r"^download/(?P<name>[\w-]+)/?$",
         views.ResourceDownload.as_view(),
         name="resource-download",
     ),
+    # used to construct locations for the registry
+    re_path(r"^download/$", views.notfound, name="resource-download-base"),
     # fallthrough to 404
     re_path(r"^.*/$", views.notfound, name="notfound"),
 ]

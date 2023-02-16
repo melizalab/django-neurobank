@@ -2,6 +2,7 @@
 # -*- mode: python -*-
 from http import HTTPStatus
 
+from collections import OrderedDict
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
 from django.views.generic.detail import BaseDetailView
@@ -12,6 +13,7 @@ from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
+from urllib.parse import urlparse
 
 from nbank_registry import __version__, api_version, errors, models, serializers
 
@@ -195,7 +197,6 @@ class DataTypeDetail(generics.RetrieveAPIView):
 class LocationList(generics.ListAPIView):
     """List locations for a specific resource"""
 
-    queryset = models.Location.objects.all()
     serializer_class = serializers.LocationSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = LocationFilter
@@ -206,8 +207,29 @@ class LocationList(generics.ListAPIView):
 
     def get_queryset(self):
         resource = self.get_object()
-        locations = resource.location_set.all()
-        return locations
+        return resource.location_set.all()
+
+    def list(self, request, *args, **kwargs):
+        resource = self.get_object()
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        data = serializer.data
+        # add the registry location
+        try:
+            resource.resolve_to_path()
+            base = reverse("neurobank:resource-download-base")
+            url = urlparse(request.build_absolute_uri(base))
+            data.append(
+                OrderedDict(
+                    archive_name="registry",
+                    scheme=request.scheme,
+                    root=f"{url.netloc}{url.path}",
+                    resource_name=resource.name,
+                )
+            )
+        except errors.NotAvailableForDownloadError:
+            pass
+        return Response(data)
 
     def post(self, request, *args, **kwargs):
         data = {
