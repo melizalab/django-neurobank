@@ -147,12 +147,23 @@ class ResourceTests(APIAuthTestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
-    def test_cannot_delete_resource(self):
+    def test_cannot_anonymously_delete_resource(self):
+        response = self.client.delete(
+            reverse("neurobank:resource", args=[self.resource])
+        )
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_can_delete_resource(self):
         self.login()
         response = self.client.delete(
             reverse("neurobank:resource", args=[self.resource])
         )
-        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        response2 = self.client.get(
+            reverse("neurobank:resource", args=[self.resource.name])
+        )
+        self.assertEqual(response2.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertTrue(self.location not in Location.objects.all())
 
     def test_cannot_modify_name(self):
         self.login()

@@ -127,7 +127,7 @@ class ResourceList(generics.ListCreateAPIView):
         serializer.save(created_by=self.request.user)
 
 
-class ResourceDetail(generics.RetrieveUpdateAPIView):
+class ResourceDetail(generics.RetrieveUpdateDestroyAPIView):
     lookup_field = "name"
     queryset = models.Resource.objects.all()
     serializer_class = serializers.ResourceSerializer
