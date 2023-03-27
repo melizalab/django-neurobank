@@ -5,6 +5,7 @@ import os
 import posixpath as ppath
 import tempfile
 import uuid
+import unittest
 
 from django.contrib.auth.models import User
 from django.test import override_settings
@@ -41,6 +42,9 @@ class ResourceTests(APIAuthTestCase):
         )
         self.archive = Archive.objects.create(
             name="local", scheme="neurobank", root="/home/data/intracellular"
+        )
+        self.archive_2 = Archive.objects.create(
+            name="other", scheme="neurobank", root="/home/data/other"
         )
         self.resource = Resource.objects.create(
             sha1=hashlib.sha1(b"").hexdigest(),
@@ -90,6 +94,26 @@ class ResourceTests(APIAuthTestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_cannot_create_resource_with_duplicate_name(self):
+        self.login()
+        response = self.client.post(
+            reverse("neurobank:resource-list"),
+            {
+                "dtype": self.dtype.name,
+                "name": self.resource.name,
+                "locations": [self.archive_2.name],
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        # check that the location was not created (database should roll back on error)
+        response = self.client.get(
+            reverse("neurobank:location-list", args=[self.resource])
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn(
+            self.archive_2.name, [l["archive_name"] for l in response.data]
+        )
+
     def test_can_create_resource_with_metadata(self):
         self.login()
         myuuid = str(uuid.uuid4())
@@ -116,12 +140,16 @@ class ResourceTests(APIAuthTestCase):
 
     def test_cannot_create_resource_with_invalid_location(self):
         self.login()
+        myuuid = str(uuid.uuid4())
         response = self.client.post(
             reverse("neurobank:resource-list"),
-            {"dtype": self.dtype.name, "locations": ["bad-location"]},
+            {"dtype": self.dtype.name, "name": myuuid, "locations": ["bad-location"]},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        # check that resource was not created
+        response = self.client.get(reverse("neurobank:resource", args=[myuuid]))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_can_access_resource_detail(self):
         response = self.client.get(reverse("neurobank:resource", args=[self.resource]))
@@ -192,6 +220,21 @@ class ResourceTests(APIAuthTestCase):
         self.assertDictContainsSubset(
             {"test_field": "value"}, response.data["metadata"]
         )
+
+    @unittest.skip("not implemented")
+    def test_can_dry_run_create_resource(self):
+        self.login()
+        response = self.client.post(
+            reverse("neurobank:resource-test-create"),
+            {
+                "dtype": self.dtype.name,
+            },
+        )
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        response2 = self.client.get(
+            reverse("neurobank:resource", args=[response.data["name"]])
+        )
+        self.assertEqual(response2.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class LocationTests(APIAuthTestCase):
@@ -518,6 +561,7 @@ class DownloadTests(APIAuthTestCase):
         super(DownloadTests, self).tearDown()
         self.directory.cleanup()
 
+    @unittest.skip("sqlite backend")
     def test_nginx_header(self):
         url = reverse("neurobank:resource-download", args=[self.resource])
         response = self.client.get(url)
