@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # -*- mode: python -*-
-from django.urls import re_path
+from django.urls import re_path, path
 
 from nbank_registry import views
 
@@ -24,9 +24,9 @@ urlpatterns = [
         views.ResourceDetail.as_view(),
         name="resource",
     ),
-    re_path(
-        r"^resources/(?P<name>[\w-]+)/download",
-        views.ResourceDownload.as_view(),
+    path(
+        "resources/<slug:name>/download",
+        views.download_resource,
         name="resource-download-old",
     ),
     re_path(
@@ -35,13 +35,18 @@ urlpatterns = [
         name="location-list",
     ),
     re_path(
-        r"^resources/(?P<resource_name>[\w-]+)/locations/(?P<archive_pk>[\w-]+)/$",
-        views.LocationDetail.as_view(),
-        name="location",
+        r"^bulk/resources/$",
+        views.bulk_resource_list,
+        name="bulk-resource-list",
     ),
     re_path(
-        r"^download/(?P<name>[\w-]+)/?$",
-        views.ResourceDownload.as_view(),
+        r"^bulk/locations/$",
+        views.bulk_location_list,
+        name="bulk-location-list",
+    ),
+    path(
+        "download/<slug:name>/",
+        views.download_resource,
         name="resource-download",
     ),
     # used to construct locations for the registry

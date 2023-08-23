@@ -15,6 +15,3 @@ def random_id():
     """Generate a random base36 id"""
     randi = random.randint(0, base36.maximum)
     return base36.hash(randi).lower()
-
-
-from django.contrib.postgres.operations import HStoreExtension

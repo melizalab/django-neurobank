@@ -4,11 +4,9 @@ from __future__ import unicode_literals
 
 import re
 
-from django.urls import reverse
 from rest_framework import serializers
 from rest_framework.validators import UniqueTogetherValidator, UniqueValidator
 
-from nbank_registry import errors
 from nbank_registry.models import Archive, DataType, Location, Resource
 
 sha1_re = re.compile(r"[0-9a-fA-F]{40}")
@@ -50,15 +48,6 @@ class ResourceSerializer(serializers.ModelSerializer):
     )
     created_by = serializers.ReadOnlyField(source="created_by.username")
     metadata = serializers.JSONField(required=False)
-    download_url = serializers.SerializerMethodField(required=False)
-
-    def get_download_url(self, obj):
-        try:
-            obj.resolve_to_path()
-            path = reverse("neurobank:resource-download", args=[obj])
-            return self.context["request"].build_absolute_uri(path)
-        except errors.NotAvailableForDownloadError:
-            return None
 
     def validate_sha1(self, value):
         if self.instance is not None and self.instance.sha1 != value:
@@ -73,19 +62,6 @@ class ResourceSerializer(serializers.ModelSerializer):
         if self.instance is not None and self.instance.name != value:
             raise serializers.ValidationError("name cannot be updated")
         return value
-
-    class Meta:
-        model = Resource
-        fields = (
-            "name",
-            "sha1",
-            "dtype",
-            "metadata",
-            "locations",
-            "created_by",
-            "created_on",
-            "download_url",
-        )
 
     def create(self, validated_data):
         archives = validated_data.pop("locations", [])
@@ -103,7 +79,7 @@ class ResourceSerializer(serializers.ModelSerializer):
         archives = validated_data.pop("locations", [])
         for archive in archives:
             if archive not in instance.locations:
-                Location.objects.create(resource=resource, archive=archive)
+                Location.objects.create(resource=instance, archive=archive)
         instance.dtype = validated_data.get("dtype", instance.dtype)
         for key, value in validated_data.get("metadata", {}).items():
             if value is not None:
@@ -113,11 +89,17 @@ class ResourceSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
-    def to_representation(self, instance):
-        ret = super().to_representation(instance)
-        if ret["download_url"] is None:
-            del ret["download_url"]
-        return ret
+    class Meta:
+        model = Resource
+        fields = (
+            "name",
+            "sha1",
+            "dtype",
+            "metadata",
+            "locations",
+            "created_by",
+            "created_on",
+        )
 
 
 class DataTypeSerializer(serializers.ModelSerializer):

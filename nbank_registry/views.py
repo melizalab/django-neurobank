@@ -1,11 +1,9 @@
 # -*- coding: utf-8 -*-
 # -*- mode: python -*-
-from http import HTTPStatus
+import itertools
 
-from collections import OrderedDict
-from django.http import HttpResponse
+from django.db.models import Q
 from django.shortcuts import get_object_or_404
-from django.views.generic.detail import BaseDetailView
 from django_filters import rest_framework as filters
 from django_sendfile import sendfile
 from drf_link_header_pagination import LinkHeaderPagination
@@ -15,7 +13,32 @@ from rest_framework.response import Response
 from rest_framework.reverse import reverse
 from urllib.parse import urlparse
 
-from nbank_registry import __version__, api_version, errors, models, serializers
+from nbank_registry import (
+    __version__,
+    api_version,
+    errors,
+    models,
+    serializers,
+    resource_download,
+)
+
+
+def all_locations(resource, request):
+    """Helper function returns a list of all the locations associated with
+    resource. If the resource dtype is marked as downloadable, a fake loction
+    that points to the registry is also included.
+
+    """
+    location_set = resource.location_set.all()
+    if not resource.dtype.downloadable:
+        return location_set
+    base = reverse("neurobank:resource-download-base")
+    url = urlparse(request.build_absolute_uri(base))
+    registry_archive = models.Archive(
+        name="registry", scheme=request.scheme, root=f"{url.netloc}{url.path}"
+    )
+    registry_location = models.Location(archive=registry_archive, resource=resource)
+    return itertools.chain(location_set, [registry_location])
 
 
 @api_view(["GET"])
@@ -37,12 +60,12 @@ def api_root(request, format=None):
 
 
 @api_view(["GET"])
-def notfound(request, format=None):
+def notfound(request):
     return Response({"detail": "not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
 @api_view(["GET"])
-def api_info(request, format=None):
+def api_info(request):
     return Response(
         {"name": "django-neurobank", "version": __version__, "api_version": api_version}
     )
@@ -77,15 +100,6 @@ class ResourceFilter(filters.FilterSet):
         }
 
 
-class LocationFilter(filters.FilterSet):
-    name = filters.CharFilter(field_name="archive__name", lookup_expr="icontains")
-    scheme = filters.CharFilter(field_name="archive__scheme", lookup_expr="istartswith")
-
-    class Meta:
-        model = models.Location
-        fields = ["name", "scheme"]
-
-
 class ResourceList(generics.ListCreateAPIView):
     """This view is a list of resources in the registry.
 
@@ -115,7 +129,7 @@ class ResourceList(generics.ListCreateAPIView):
         # queries
         mf = {}
         me = {}
-        for (k, v) in self.request.GET.items():
+        for k, v in self.request.GET.items():
             if k.startswith("metadata__"):
                 if k.endswith("__neq"):
                     me[k[:-5]] = v
@@ -134,34 +148,18 @@ class ResourceDetail(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
 
 
-class ResourceDownload(BaseDetailView):
-    slug_url_kwarg = "name"
-    slug_field = "name"
-    model = models.Resource
-    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
-
-    def render_to_response(self, context):
-        try:
-            path = self.object.resolve_to_path()
-            return sendfile(self.request, path, attachment=True)
-        except errors.SchemeNotImplementedError:
-            return HttpResponse(
-                status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
-                reason=(
-                    f"None of the archives in which resource"
-                    f" '{self.object}' is stored support resolution"
-                    " to a path"
-                ),
-            )
-        except errors.NonDownloadableDtypeError:
-            return HttpResponse(
-                status=HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
-                reason=(
-                    f"Resource '{self.object}' is of type"
-                    f" '{self.object.dtype}', which does not support"
-                    " direct downloading."
-                ),
-            )
+@api_view(["GET"])
+def download_resource(request, name):
+    try:
+        resource = models.Resource.objects.get(name=name)
+        path = resource_download.local_resource_path(resource)
+    except models.Resource.DoesNotExist:
+        return Response({"detail": "not found"}, status=status.HTTP_404_NOT_FOUND)
+    except errors.NotAvailableForDownloadError as err:
+        return Response(
+            {"detail": str(err)}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
+        )
+    return sendfile(request, path, attachment=True)
 
 
 class ArchiveList(generics.ListCreateAPIView):
@@ -198,8 +196,6 @@ class LocationList(generics.ListAPIView):
     """List locations for a specific resource"""
 
     serializer_class = serializers.LocationSerializer
-    filter_backends = (filters.DjangoFilterBackend,)
-    filterset_class = LocationFilter
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
 
     def get_object(self):
@@ -211,25 +207,9 @@ class LocationList(generics.ListAPIView):
 
     def list(self, request, *args, **kwargs):
         resource = self.get_object()
-        queryset = self.filter_queryset(self.get_queryset())
+        queryset = all_locations(resource, request)
         serializer = self.get_serializer(queryset, many=True)
-        data = serializer.data
-        # add the registry location
-        try:
-            resource.resolve_to_path()
-            base = reverse("neurobank:resource-download-base")
-            url = urlparse(request.build_absolute_uri(base))
-            data.append(
-                OrderedDict(
-                    archive_name="registry",
-                    scheme=request.scheme,
-                    root=f"{url.netloc}{url.path}",
-                    resource_name=resource.name,
-                )
-            )
-        except errors.NotAvailableForDownloadError:
-            pass
-        return Response(data)
+        return Response(serializer.data)
 
     def post(self, request, *args, **kwargs):
         data = {
@@ -254,4 +234,41 @@ class LocationDetail(generics.RetrieveDestroyAPIView):
             models.Location,
             resource__name=self.kwargs["resource_name"],
             archive__name=self.kwargs["archive_pk"],
+        )
+
+
+@api_view(["POST"])
+def bulk_resource_list(request, format=None):
+    """Retrieve metadata for multiple resources by name. POST {'names': ['name1', 'name2',...]}"""
+    try:
+        query = Q()
+        for name in request.data["names"]:
+            query |= Q(name=name)
+        resources = models.Resource.objects.filter(query)
+        serializer = serializers.ResourceSerializer(resources, many=True)
+        return Response(serializer.data)
+    except KeyError:
+        return Response(
+            {"detail": "usage: {'names': ['id1', 'id2', ...]}"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+@api_view(["POST"])
+def bulk_location_list(request, format=None):
+    """Retrieve locations for multiple resources by name. POST {'names': ['name1', 'name2',...]}"""
+    try:
+        query = Q()
+        for name in request.data["names"]:
+            query |= Q(name=name)
+        output = []
+        for resource in models.Resource.objects.filter(query):
+            locations = all_locations(resource, request)
+            serializer = serializers.LocationSerializer(locations, many=True)
+            output.append({"name": resource.name, "locations": serializer.data})
+        return Response(output)
+    except KeyError:
+        return Response(
+            {"detail": "usage: {'names': ['id1', 'id2', ...]}"},
+            status=status.HTTP_400_BAD_REQUEST,
         )

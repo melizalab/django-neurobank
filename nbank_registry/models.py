@@ -2,11 +2,8 @@
 # -*- mode: python -*-
 from __future__ import unicode_literals
 
-from pathlib import Path
-
 from django.db import models
 
-from nbank_registry import errors
 from nbank_registry.tools import random_id
 
 
@@ -32,16 +29,6 @@ class Resource(models.Model):
 
     def __str__(self):
         return str(self.name)
-
-    def resolve_to_path(self):
-        if not self.dtype.downloadable:
-            raise errors.NonDownloadableDtypeError()
-        for location in self.location_set.all():
-            try:
-                return location.resolve_to_path()
-            except errors.SchemeNotImplementedError:
-                pass
-        raise errors.SchemeNotImplementedError()
 
     class Meta:
         ordering = ["-id"]
@@ -84,26 +71,6 @@ class Location(models.Model):
     id = models.AutoField(primary_key=True)
     resource = models.ForeignKey("Resource", on_delete=models.CASCADE)
     archive = models.ForeignKey("Archive", on_delete=models.CASCADE)
-
-    def resolve_to_path(self):
-        if self.archive.scheme == "neurobank":
-            return self._resolve_neurobank_path(self)
-        raise errors.SchemeNotImplementedError()
-
-    @staticmethod
-    def _resolve_neurobank_path(location):
-        import nbank
-
-        from nbank_registry.serializers import LocationSerializer
-
-        serialized_location = LocationSerializer(location).data
-        path_without_ext = nbank.core.get_archive(serialized_location)
-        path = nbank.archive.find_resource(path_without_ext)
-        if path is None:
-            raise errors.MissingFileError(location.resource, path_without_ext)
-        if not Path(path).is_file():
-            raise errors.NotAFileError(location.resource, path_without_ext)
-        return path
 
     def __str__(self):
         return ":".join((self.archive.name, str(self.resource)))

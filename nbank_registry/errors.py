@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+# -*- mode: python -*-
+
+
 class NotAvailableForDownloadError(Exception):
     pass
 
@@ -8,9 +12,7 @@ class MissingFileError(NotAvailableForDownloadError):
         self.path = path
 
     def __str__(self):
-        return (
-            f"Could not find resource '{self.resource}' in directory" f" {self.path}."
-        )
+        return f"Could not find resource '{self.resource}' in directory" f" {self.path}"
 
 
 class NotAFileError(NotAvailableForDownloadError):
@@ -28,10 +30,7 @@ class NotAFileError(NotAvailableForDownloadError):
 
 class SchemeNotImplementedError(NotAvailableForDownloadError):
     def __str__(self):
-        return (
-            "The requested resource is stored in an archive that"
-            " uses a scheme that is not supported by this registry"
-        )
+        return "The requested resource is not in an archive that uses a scheme supported by this registry"
 
 
 class NonDownloadableDtypeError(NotAvailableForDownloadError):
