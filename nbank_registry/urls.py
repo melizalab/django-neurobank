@@ -6,21 +6,19 @@ from nbank_registry import views
 
 app_name = "neurobank"
 urlpatterns = [
-    re_path(r"^$", views.api_root, name="index"),
-    re_path(r"^info/$", views.api_info, name="api-info"),
-    re_path(r"^datatypes/$", views.DataTypeList.as_view(), name="datatype-list"),
-    re_path(
-        r"^datatypes/(?P<name>[\w-]+)/$",
+    path("", views.api_root, name="index"),
+    path("info/", views.api_info, name="api-info"),
+    path("datatypes/", views.DataTypeList.as_view(), name="datatype-list"),
+    path(
+        "datatypes/<slug:name>/",
         views.DataTypeDetail.as_view(),
         name="datatype",
     ),
-    re_path(r"^archives/$", views.ArchiveList.as_view(), name="archive-list"),
-    re_path(
-        r"^archives/(?P<name>[\w-]+)/$", views.ArchiveDetail.as_view(), name="archive"
-    ),
-    re_path(r"^resources/$", views.ResourceList.as_view(), name="resource-list"),
-    re_path(
-        r"^resources/(?P<name>[\w-]+)/$",
+    path("archives/", views.ArchiveList.as_view(), name="archive-list"),
+    path("archives/<slug:name>/", views.ArchiveDetail.as_view(), name="archive"),
+    path("resources/", views.ResourceList.as_view(), name="resource-list"),
+    path(
+        "resources/<slug:name>/",
         views.ResourceDetail.as_view(),
         name="resource",
     ),
@@ -29,23 +27,23 @@ urlpatterns = [
         views.download_resource,
         name="resource-download-old",
     ),
-    re_path(
-        r"^resources/(?P<resource_name>[\w-]+)/locations/$",
+    path(
+        "resources/<slug:resource_name>/locations/",
         views.LocationList.as_view(),
         name="location-list",
     ),
-    re_path(
-        r"^resources/(?P<resource_name>[\w-]+)/locations/(?P<archive_pk>[\w-]+)/$",
+    path(
+        "resources/<slug:resource_name>/locations/<slug:archive_pk>/",
         views.LocationDetail.as_view(),
         name="location",
     ),
-    re_path(
-        r"^bulk/resources/$",
+    path(
+        "bulk/resources/",
         views.bulk_resource_list,
         name="bulk-resource-list",
     ),
-    re_path(
-        r"^bulk/locations/$",
+    path(
+        "bulk/locations/",
         views.bulk_location_list,
         name="bulk-location-list",
     ),
@@ -55,7 +53,7 @@ urlpatterns = [
         name="resource-download",
     ),
     # used to construct locations for the registry
-    re_path(r"^download/$", views.notfound, name="resource-download-base"),
+    path("download/", views.notfound, name="resource-download-base"),
     # fallthrough to 404
     re_path(r"^.*/$", views.notfound, name="notfound"),
 ]
