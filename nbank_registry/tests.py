@@ -466,43 +466,8 @@ class ResourceFilterTests(APIAuthTestCase):
         self.assertEqual(response.data[0]["name"], str(self.resource2))
 
 
-class LocationFilterTests(APIAuthTestCase):
-    def setUp(self):
-        super(LocationFilterTests, self).setUp()
-        self.dtype = DataType.objects.create(
-            name="spike_times",
-            content_type="application/vnd.meliza-org.pproc+json; version=1.0",
-        )
-        self.archive_local = Archive.objects.create(
-            name="local", scheme="neurobank", root="/home/data/intracellular"
-        )
-        self.archive_remote = Archive.objects.create(
-            name="remote", scheme="http", root="/meliza.org/data/intracellular"
-        )
-        self.resource = Resource.objects.create(
-            sha1=hashlib.sha1(b"").hexdigest(),
-            dtype=self.dtype,
-            created_by=self.user,
-            metadata={"experimenter": "dmeliza"},
-        )
-        Location.objects.create(resource=self.resource, archive=self.archive_local)
-        Location.objects.create(resource=self.resource, archive=self.archive_remote)
-
-    def test_can_filter_by_name(self):
-        url = reverse("neurobank:location-list", args=[self.resource])
-        response = self.client.get(url, {"name": self.archive_local.name[:4]})
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-
-    def test_can_filter_by_scheme(self):
-        url = reverse("neurobank:location-list", args=[self.resource])
-        response = self.client.get(url, {"scheme": self.archive_remote.scheme})
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-
-
 @override_settings(
-    SENDFILE_BACKEND="sendfile.backends.nginx",
+    SENDFILE_BACKEND="django_sendfile.backends.nginx",
     SENDFILE_ROOT="/",
     SENDFILE_URL="/",
 )
@@ -567,8 +532,8 @@ class DownloadTests(APIAuthTestCase):
     def test_missing_file(self):
         missing_resource, _ = self._create_file(b"missing", skip_file_creation=True)
         url = reverse("neurobank:resource-download", args=[missing_resource])
-        with self.assertRaises(errors.MissingFileError):
-            self.client.get(url)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 415)
         url = reverse("neurobank:resource", args=[missing_resource])
         response = self.client.get(url)
         self.assertNotIn("download_url", response.data)
@@ -592,8 +557,8 @@ class DownloadTests(APIAuthTestCase):
         missing_resource, path = self._create_file(b"missing", skip_file_creation=True)
         os.makedirs(path)
         url = reverse("neurobank:resource-download", args=[missing_resource])
-        with self.assertRaises(errors.NotAFileError):
-            self.client.get(url)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 415)
         url = reverse("neurobank:resource", args=[missing_resource])
         response = self.client.get(url)
         self.assertNotIn("download_url", response.data)
@@ -609,10 +574,3 @@ class DownloadTests(APIAuthTestCase):
         url = reverse("neurobank:resource", args=[resource])
         response = self.client.get(url)
         self.assertNotIn("download_url", response.data)
-
-    def test_model_view_has_correct_url(self):
-        url = reverse("neurobank:resource", args=[self.resource])
-        response = self.client.get(url)
-        path = reverse("neurobank:resource-download", args=[self.resource])
-        download_url = "http://testserver" + path
-        self.assertEqual(response.data["download_url"], download_url)

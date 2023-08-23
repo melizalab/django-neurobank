@@ -35,6 +35,11 @@ urlpatterns = [
         name="location-list",
     ),
     re_path(
+        r"^resources/(?P<resource_name>[\w-]+)/locations/(?P<archive_pk>[\w-]+)/$",
+        views.LocationDetail.as_view(),
+        name="location",
+    ),
+    re_path(
         r"^bulk/resources/$",
         views.bulk_resource_list,
         name="bulk-resource-list",
