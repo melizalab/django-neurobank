@@ -22,6 +22,8 @@ from nbank_registry import (
     serializers,
 )
 
+DOWNLOAD_ARCHIVE_NAME = "registry"
+
 
 def all_locations(resource, request):
     """Helper function returns a list of all the locations associated with
@@ -35,7 +37,9 @@ def all_locations(resource, request):
     base = reverse("neurobank:resource-download-base")
     url = urlparse(request.build_absolute_uri(base))
     registry_archive = models.Archive(
-        name="registry", scheme=request.scheme, root=f"{url.netloc}{url.path}"
+        name=DOWNLOAD_ARCHIVE_NAME,
+        scheme=request.scheme,
+        root=f"{url.netloc}{url.path}",
     )
     registry_location = models.Location(archive=registry_archive, resource=resource)
     return itertools.chain(location_set, [registry_location])
@@ -237,38 +241,45 @@ class LocationDetail(generics.RetrieveDestroyAPIView):
         )
 
 
-@api_view(["POST"])
-def bulk_resource_list(request, format=None):
-    """Retrieve metadata for multiple resources by name. POST {'names': ['name1', 'name2',...]}"""
+def check_bulk_args(request):
     try:
-        query = Q()
-        for name in request.data["names"]:
-            query |= Q(name=name)
-        resources = models.Resource.objects.filter(query)
-        serializer = serializers.ResourceSerializer(resources, many=True)
-        return Response(serializer.data)
+        names = request.data["names"]
     except KeyError:
         return Response(
             {"detail": "usage: {'names': ['id1', 'id2', ...]}"},
             status=status.HTTP_400_BAD_REQUEST,
         )
+    if len(names) == 0:
+        return Response(
+            {"detail": "must supply at least one name"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+@api_view(["POST"])
+def bulk_resource_list(request, format=None):
+    """Retrieve metadata for multiple resources by name. POST {'names': ['name1', 'name2',...]}"""
+    if (resp := check_bulk_args(request)) is not None:
+        return resp
+    query = Q()
+    for name in request.data["names"]:
+        query |= Q(name=name)
+    resources = models.Resource.objects.filter(query)
+    serializer = serializers.ResourceSerializer(resources, many=True)
+    return Response(serializer.data)
 
 
 @api_view(["POST"])
 def bulk_location_list(request, format=None):
     """Retrieve locations for multiple resources by name. POST {'names': ['name1', 'name2',...]}"""
-    try:
-        query = Q()
-        for name in request.data["names"]:
-            query |= Q(name=name)
-        output = []
-        for resource in models.Resource.objects.filter(query):
-            locations = all_locations(resource, request)
-            serializer = serializers.LocationSerializer(locations, many=True)
-            output.append({"name": resource.name, "locations": serializer.data})
-        return Response(output)
-    except KeyError:
-        return Response(
-            {"detail": "usage: {'names': ['id1', 'id2', ...]}"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+    if (resp := check_bulk_args(request)) is not None:
+        return resp
+    query = Q()
+    for name in request.data["names"]:
+        query |= Q(name=name)
+    output = []
+    for resource in models.Resource.objects.filter(query):
+        locations = all_locations(resource, request)
+        serializer = serializers.LocationSerializer(locations, many=True)
+        output.append({"name": resource.name, "locations": serializer.data})
+    return Response(output)

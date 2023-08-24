@@ -8,9 +8,6 @@ local path has been vendored from the neurobank package.
 
 """
 from pathlib import Path
-from urllib.parse import urlparse
-
-from rest_framework.reverse import reverse
 
 from nbank_registry import errors
 

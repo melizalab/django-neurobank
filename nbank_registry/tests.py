@@ -14,6 +14,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from nbank_registry.models import Archive, DataType, Location, Resource
+from nbank_registry.views import DOWNLOAD_ARCHIVE_NAME
 
 
 class APIAuthTestCase(APITestCase):
@@ -151,7 +152,9 @@ class ResourceTests(APIAuthTestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
     def test_can_access_resource_detail(self):
-        response = self.client.get(reverse("neurobank:resource", args=[self.resource]))
+        response = self.client.get(
+            reverse("neurobank:resource", args=[self.resource.name])
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertDictContainsSubset(
             {
@@ -173,6 +176,94 @@ class ResourceTests(APIAuthTestCase):
         url = ppath.join(reverse("neurobank:resource-list"), "not.a.slug") + "/"
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_can_bulk_access_resource_detail(self):
+        query = {"names": [self.resource.name]}
+        response = self.client.post(
+            reverse("neurobank:bulk-resource-list"), query, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertDictContainsSubset(
+            {
+                "name": str(self.resource),
+                "sha1": self.resource.sha1,
+                "dtype": self.dtype.name,
+                "created_by": self.user.username,
+                "metadata": self.resource.metadata,
+                "locations": [self.archive.name],
+            },
+            response.data[0],
+        )
+
+    def test_cannot_bulk_access_resource_with_empty_list(self):
+        query = {"names": []}
+        response = self.client.post(
+            reverse("neurobank:bulk-resource-list"), query, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_bulk_access_resource_with_bad_request(self):
+        query = {"something_wrong": [self.resource.name]}
+        response = self.client.post(
+            reverse("neurobank:bulk-resource-list"), query, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_can_access_resource_locations(self):
+        response = self.client.get(
+            reverse("neurobank:location-list", args=[self.resource.name])
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertDictContainsSubset(
+            {
+                "archive_name": self.archive.name,
+                "resource_name": self.resource.name,
+                "root": self.archive.root,
+                "scheme": self.archive.scheme,
+            },
+            response.data[0],
+        )
+
+    def test_cannot_access_nonexistent_resource_locations(self):
+        response = self.client.get(
+            reverse("neurobank:location-list", args=["argle-bargle"])
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_bulk_access_resource_locations(self):
+        query = {"names": [self.resource.name]}
+        response = self.client.post(
+            reverse("neurobank:bulk-location-list"), query, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        res_loc = response.data[0]
+        self.assertEqual(len(res_loc["locations"]), 1)
+        self.assertDictContainsSubset(
+            {
+                "archive_name": self.archive.name,
+                "resource_name": self.resource.name,
+                "root": self.archive.root,
+                "scheme": self.archive.scheme,
+            },
+            res_loc["locations"][0],
+        )
+
+    def test_cannot_bulk_access_resource_locations_with_empty_list(self):
+        query = {"names": []}
+        response = self.client.post(
+            reverse("neurobank:bulk-location-list"), query, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_bulk_access_resource_locations_with_bad_request(self):
+        query = {"something_wrong": [self.resource.name]}
+        response = self.client.post(
+            reverse("neurobank:bulk-location-list"), query, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_cannot_anonymously_delete_resource(self):
         response = self.client.delete(
@@ -559,6 +650,27 @@ class DownloadTests(APIAuthTestCase):
     def tearDown(self):
         super(DownloadTests, self).tearDown()
         self.directory.cleanup()
+
+    def test_locations_include_remote(self):
+        url = reverse("neurobank:location-list", args=[self.resource])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertSetEqual(
+            {self.archive.name, DOWNLOAD_ARCHIVE_NAME},
+            {loc["archive_name"] for loc in response.data},
+        )
+
+    def test_bulk_locations_include_remote(self):
+        query = {"names": [self.resource.name]}
+        url = reverse("neurobank:bulk-location-list")
+        response = self.client.post(url, query, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        res_loc = response.data[0]["locations"]
+        self.assertSetEqual(
+            {self.archive.name, DOWNLOAD_ARCHIVE_NAME},
+            {loc["archive_name"] for loc in res_loc},
+        )
 
     def test_nginx_header(self):
         url = reverse("neurobank:resource-download", args=[self.resource])
