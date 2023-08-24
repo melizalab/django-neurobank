@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # -*- mode: python -*-
 import itertools
+from urllib.parse import urlparse
 
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
@@ -11,15 +12,14 @@ from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
-from urllib.parse import urlparse
 
 from nbank_registry import (
     __version__,
     api_version,
     errors,
     models,
-    serializers,
     resource_download,
+    serializers,
 )
 
 

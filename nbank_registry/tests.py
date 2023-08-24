@@ -4,8 +4,8 @@ import hashlib
 import os
 import posixpath as ppath
 import tempfile
-import uuid
 import unittest
+import uuid
 
 from django.contrib.auth.models import User
 from django.test import override_settings
@@ -13,7 +13,6 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from nbank_registry import errors
 from nbank_registry.models import Archive, DataType, Location, Resource
 
 
@@ -561,7 +560,6 @@ class DownloadTests(APIAuthTestCase):
         super(DownloadTests, self).tearDown()
         self.directory.cleanup()
 
-    @unittest.skip("sqlite backend")
     def test_nginx_header(self):
         url = reverse("neurobank:resource-download", args=[self.resource])
         response = self.client.get(url)
