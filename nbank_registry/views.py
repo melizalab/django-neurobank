@@ -258,6 +258,12 @@ def check_bulk_args(request):
         )
 
 
+class JSONLRenderer(JSONRenderer):
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        out = super().render(data, accepted_media_type=None, renderer_context=None)
+        return out + b"\n"
+
+
 @api_view(["POST"])
 def bulk_resource_list(request, format=None):
     """Retrieve metadata for multiple resources by name. POST {'names': ['name1', 'name2',...]}.
@@ -270,15 +276,10 @@ def bulk_resource_list(request, format=None):
     for name in request.data["names"]:
         query |= Q(name=name)
     qs = models.Resource.objects.filter(query)
-    renderer = JSONRenderer()
+    renderer = JSONLRenderer()
+    gen = (renderer.render(serializers.ResourceSerializer(obj).data) for obj in qs)
 
-    def gen():
-        for obj in qs:
-            serializer = serializers.ResourceSerializer(obj)
-            yield renderer.render(serializer.data)
-            yield "\n"
-
-    return StreamingHttpResponse(gen())
+    return StreamingHttpResponse(gen)
 
 
 @api_view(["POST"])
@@ -293,13 +294,17 @@ def bulk_location_list(request, format=None):
     for name in request.data["names"]:
         query |= Q(name=name)
     qs = models.Resource.objects.filter(query)
-    renderer = JSONRenderer()
-
-    def gen():
-        for resource in qs:
-            locations = all_locations(resource, request)
-            serializer = serializers.LocationSerializer(locations, many=True)
-            yield renderer.render({"name": resource.name, "locations": serializer.data})
-            yield "\n"
-
-    return StreamingHttpResponse(gen())
+    renderer = JSONLRenderer()
+    gen = (
+        renderer.render(
+            {
+                "name": resource.name,
+                "sha1": resource.sha1,
+                "locations": serializers.LocationSerializer(
+                    all_locations(resource, request), many=True
+                ).data,
+            }
+        )
+        for resource in qs
+    )
+    return StreamingHttpResponse(gen)
