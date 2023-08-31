@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # -*- mode: python -*-
 import hashlib
+import json
 import os
 import posixpath as ppath
 import tempfile
@@ -183,7 +184,8 @@ class ResourceTests(APIAuthTestCase):
             reverse("neurobank:bulk-resource-list"), query, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
+        data = [json.loads(record) for record in response]
+        self.assertEqual(len(data), 1)
         self.assertDictContainsSubset(
             {
                 "name": str(self.resource),
@@ -193,7 +195,7 @@ class ResourceTests(APIAuthTestCase):
                 "metadata": self.resource.metadata,
                 "locations": [self.archive.name],
             },
-            response.data[0],
+            data[0],
         )
 
     def test_cannot_bulk_access_resource_with_empty_list(self):
@@ -238,8 +240,9 @@ class ResourceTests(APIAuthTestCase):
             reverse("neurobank:bulk-location-list"), query, format="json"
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        res_loc = response.data[0]
+        data = [json.loads(record) for record in response]
+        self.assertEqual(len(data), 1)
+        res_loc = data[0]
         self.assertEqual(len(res_loc["locations"]), 1)
         self.assertDictContainsSubset(
             {
@@ -665,8 +668,9 @@ class DownloadTests(APIAuthTestCase):
         url = reverse("neurobank:bulk-location-list")
         response = self.client.post(url, query, format="json")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(len(response.data), 1)
-        res_loc = response.data[0]["locations"]
+        data = [json.loads(record) for record in response]
+        self.assertEqual(len(data), 1)
+        res_loc = data[0]["locations"]
         self.assertSetEqual(
             {self.archive.name, DOWNLOAD_ARCHIVE_NAME},
             {loc["archive_name"] for loc in res_loc},
