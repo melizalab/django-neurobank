@@ -5,11 +5,13 @@ from urllib.parse import urlparse
 
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from django.http import StreamingHttpResponse
 from django_filters import rest_framework as filters
 from django_sendfile import sendfile
 from drf_link_header_pagination import LinkHeaderPagination
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view
+from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
 
@@ -26,7 +28,7 @@ DOWNLOAD_ARCHIVE_NAME = "registry"
 
 
 def all_locations(resource, request):
-    """Helper function returns a list of all the locations associated with
+    """Helper function returns an iterator over all the locations associated with
     resource. If the resource dtype is marked as downloadable, a fake loction
     that points to the registry is also included.
 
@@ -258,28 +260,46 @@ def check_bulk_args(request):
 
 @api_view(["POST"])
 def bulk_resource_list(request, format=None):
-    """Retrieve metadata for multiple resources by name. POST {'names': ['name1', 'name2',...]}"""
+    """Retrieve metadata for multiple resources by name. POST {'names': ['name1', 'name2',...]}.
+    Streams results as line-delimited JSON records.
+
+    """
     if (resp := check_bulk_args(request)) is not None:
         return resp
     query = Q()
     for name in request.data["names"]:
         query |= Q(name=name)
-    resources = models.Resource.objects.filter(query)
-    serializer = serializers.ResourceSerializer(resources, many=True)
-    return Response(serializer.data)
+    qs = models.Resource.objects.filter(query)
+    renderer = JSONRenderer()
+
+    def gen():
+        for obj in qs:
+            serializer = serializers.ResourceSerializer(obj)
+            yield renderer.render(serializer.data)
+            yield "\n"
+
+    return StreamingHttpResponse(gen())
 
 
 @api_view(["POST"])
 def bulk_location_list(request, format=None):
-    """Retrieve locations for multiple resources by name. POST {'names': ['name1', 'name2',...]}"""
+    """Retrieve locations for multiple resources by name. POST {'names': ['name1', 'name2',...]}
+    Streams results as line-delimited JSON records.
+
+    """
     if (resp := check_bulk_args(request)) is not None:
         return resp
     query = Q()
     for name in request.data["names"]:
         query |= Q(name=name)
-    output = []
-    for resource in models.Resource.objects.filter(query):
-        locations = all_locations(resource, request)
-        serializer = serializers.LocationSerializer(locations, many=True)
-        output.append({"name": resource.name, "locations": serializer.data})
-    return Response(output)
+    qs = models.Resource.objects.filter(query)
+    renderer = JSONRenderer()
+
+    def gen():
+        for resource in qs:
+            locations = all_locations(resource, request)
+            serializer = serializers.LocationSerializer(locations, many=True)
+            yield renderer.render({"name": resource.name, "locations": serializer.data})
+            yield "\n"
+
+    return StreamingHttpResponse(gen())
