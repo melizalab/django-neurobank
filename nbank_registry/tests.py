@@ -137,7 +137,9 @@ class ResourceTests(APIAuthTestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertDictContainsSubset({"locations": [self.archive.name]}, response.data)
+        self.assertEqual(
+            response.data, response.data | {"locations": [self.archive.name]}
+        )
 
     def test_cannot_create_resource_with_invalid_location(self):
         self.login()
@@ -157,8 +159,10 @@ class ResourceTests(APIAuthTestCase):
             reverse("neurobank:resource", args=[self.resource.name])
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertDictContainsSubset(
-            {
+        self.assertEqual(
+            response.data,
+            response.data
+            | {
                 "name": str(self.resource),
                 "sha1": self.resource.sha1,
                 "dtype": self.dtype.name,
@@ -166,7 +170,6 @@ class ResourceTests(APIAuthTestCase):
                 "metadata": self.resource.metadata,
                 "locations": [self.archive.name],
             },
-            response.data,
         )
 
     def test_cannot_access_nonexistent_resource_detail(self):
@@ -186,8 +189,10 @@ class ResourceTests(APIAuthTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         data = [json.loads(record) for record in response]
         self.assertEqual(len(data), 1)
-        self.assertDictContainsSubset(
-            {
+        self.assertEqual(
+            data[0],
+            data[0]
+            | {
                 "name": str(self.resource),
                 "sha1": self.resource.sha1,
                 "dtype": self.dtype.name,
@@ -195,7 +200,6 @@ class ResourceTests(APIAuthTestCase):
                 "metadata": self.resource.metadata,
                 "locations": [self.archive.name],
             },
-            data[0],
         )
 
     def test_cannot_bulk_access_resource_with_empty_list(self):
@@ -218,14 +222,15 @@ class ResourceTests(APIAuthTestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
-        self.assertDictContainsSubset(
-            {
+        self.assertEqual(
+            response.data[0],
+            response.data[0]
+            | {
                 "archive_name": self.archive.name,
                 "resource_name": self.resource.name,
                 "root": self.archive.root,
                 "scheme": self.archive.scheme,
             },
-            response.data[0],
         )
 
     def test_cannot_access_nonexistent_resource_locations(self):
@@ -244,14 +249,15 @@ class ResourceTests(APIAuthTestCase):
         self.assertEqual(len(data), 1)
         res_loc = data[0]
         self.assertEqual(len(res_loc["locations"]), 1)
-        self.assertDictContainsSubset(
-            {
+        self.assertEqual(
+            res_loc["locations"][0],
+            res_loc["locations"][0]
+            | {
                 "archive_name": self.archive.name,
                 "resource_name": self.resource.name,
                 "root": self.archive.root,
                 "scheme": self.archive.scheme,
             },
-            res_loc["locations"][0],
         )
 
     def test_cannot_bulk_access_resource_locations_with_empty_list(self):
@@ -310,8 +316,9 @@ class ResourceTests(APIAuthTestCase):
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertDictContainsSubset(
-            {"test_field": "value"}, response.data["metadata"]
+        self.assertEqual(
+            response.data["metadata"],
+            response.data["metadata"] | {"test_field": "value"},
         )
 
     @unittest.skip("not implemented")
