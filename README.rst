@@ -67,7 +67,7 @@ documentation for
 django-sendfile2 <https://django-sendfile2.readthedocs.io/en/latest/backends.html>`__
 for details.
 
-3. Include the neurobank URLconf in your project urls.py like this::
+3. Include the neurobank URLconf in your project urls.py like this:
 
 .. code:: python
 
