@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "django-neurobank"
 dynamic = ["version"]
-description = "A simple Django app for managing a bird breeding colony"
+description = "A Django-based registry for the neurobank system"
 readme = "README.rst"
 requires-python = ">=3.10"
 license = {text = "BSD 3-Clause License"}
