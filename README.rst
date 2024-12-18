@@ -9,8 +9,8 @@ django-neurobank
 .. |Version| image:: https://img.shields.io/pypi/v/django-neurobank.svg
 .. _Version: https://pypi.python.org/pypi/django-neurobank/
 
-.. |BuildStatus| image:: https://github.com/melizalab/django-neurobank/actions/workflows/test.yml/badge.svg
-.. _BuildStatus: https://github.com/melizalab/django-neurobank/actions/workflows/test.yml
+.. |BuildStatus| image:: https://github.com/melizalab/django-neurobank/actions/workflows/test-app.yml/badge.svg
+.. _BuildStatus: https://github.com/melizalab/django-neurobank/actions/workflows/test-app.yml
 
 .. |License| image:: https://img.shields.io/pypi/l/django-neurobank.svg
 .. _License: https://opensource.org/license/bsd-3-clause/
