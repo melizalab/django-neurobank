@@ -354,34 +354,89 @@ class LocationTests(APIAuthTestCase):
             created_by=self.user,
             metadata={"experimenter": "dmeliza"},
         )
-
-    def test_can_add_and_delete_location(self):
-        url = reverse("neurobank:location-list", args=[self.resource])
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data, [])
-
-        self.login()
-        response = self.client.post(
-            url, {"archive_name": self.archive.name}, format="json"
+        self.location = Location.objects.create(
+            resource=self.resource, archive=self.archive
         )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
 
-        response = self.client.get(url)
+    def test_location_list(self):
+        response = self.client.get(
+            reverse("neurobank:location-list", args=[self.resource])
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
 
-        response = self.client.post(url, {"archive_name": self.archive.name})
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+    def test_location_list_404_invalid_resource(self):
+        response = self.client.get(reverse("neurobank:location-list", args=["adsadf"]))
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_location_404_invalid_archive(self):
+        dummy_location = "adsfadf"
+        response = self.client.get(
+            reverse("neurobank:location", args=[self.resource, dummy_location])
+        )
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_location_detail(self):
+        response = self.client.get(
+            reverse("neurobank:location", args=[self.resource, self.archive])
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        ret = response.data
+        self.assertDictEqual(
+            ret,
+            ret
+            | {
+                "archive_name": self.archive.name,
+                "resource_name": self.resource.name,
+                "scheme": self.archive.scheme,
+            },
+        )
+
+    def test_cannot_add_duplicate_location(self):
+        self.login()
+        response = self.client.post(
+            reverse("neurobank:location-list", args=[self.resource]),
+            {"archive_name": self.archive.name},
+        )
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+            "should not be able to add duplicate archive to resource locations",
+        )
+
+    def test_can_delete_location(self):
+        self.login()
         response = self.client.delete(
             reverse("neurobank:location", args=[self.resource.name, self.archive])
         )
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_204_NO_CONTENT,
+            "unable to delete a location",
+        )
 
-        response = self.client.get(url)
+        response = self.client.get(
+            reverse("neurobank:location-list", args=[self.resource])
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data, [])
+
+    def test_can_add_location(self):
+        new_archive = Archive.objects.create(
+            name="secret", scheme="neurobank", root="/home/data/secret"
+        )
+        self.login()
+        response = self.client.post(
+            reverse("neurobank:location-list", args=[self.resource]),
+            {"archive_name": new_archive.name},
+            format="json",
+        )
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_201_CREATED,
+            "unable to add location to resource",
+        )
+        self.assertEqual(self.resource.locations.count(), 2)
 
 
 class DataTypeTests(APIAuthTestCase):

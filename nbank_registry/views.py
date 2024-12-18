@@ -4,6 +4,7 @@ import itertools
 from urllib.parse import urlparse
 
 from django.db.models import Q
+from django.db.utils import IntegrityError
 from django.shortcuts import get_object_or_404
 from django.http import StreamingHttpResponse
 from django_filters import rest_framework as filters
@@ -223,11 +224,14 @@ class LocationList(generics.ListAPIView):
             "resource_name": kwargs["resource_name"],
         }
         serializer = serializers.LocationSerializer(data=data)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data, status=status.HTTP_201_CREATED)
-        else:
+        if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            serializer.save()
+        except IntegrityError as err:
+            return Response({"detail": str(err)}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class LocationDetail(generics.RetrieveDestroyAPIView):

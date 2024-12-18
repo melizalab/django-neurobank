@@ -22,7 +22,7 @@ class ArchiveAdmin(admin.ModelAdmin):
 
 
 class ResourceAdmin(admin.ModelAdmin):
-    fields = ("name", "sha1", "dtype", "metadata")
+    fields = ("name", "sha1", "dtype", "metadata", "created_by")
     list_display = (
         "name",
         "dtype",
