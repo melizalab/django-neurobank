@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "django-neurobank"
-dynamic = ["version"]
+version = "0.10.9"
 description = "A Django-based registry for the neurobank system"
 readme = "README.rst"
 requires-python = ">=3.10"
@@ -39,9 +39,6 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/melizalab/django-neurobank"
-
-[tool.hatch.version]
-path = "nbank_registry/__init__.py"
 
 [dependency-groups]
 dev = [
