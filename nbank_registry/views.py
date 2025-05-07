@@ -306,22 +306,27 @@ def bulk_location_list(request, format=None):
     if (resp := check_bulk_args(request)) is not None:
         return resp
     query = Q()
-    for name in request.data["names"]:
+    for name in request.data.pop("names"):
         query |= Q(name=name)
     qs = models.Resource.objects.filter(query).select_related("dtype")
     renderer = JSONLRenderer()
 
     def gen(qs):
         for resource in qs:
-            qs = resource.location_set.all()
-            if resource.dtype.downloadable:
-                qs = add_registry_location(request, resource, qs)
+            lqs = LocationFilter(request.data, resource.location_set.all()).qs
+            if not lqs.exists():
+                continue
+            if resource.dtype.downloadable and len(request.data) == 0:
+                lqs = add_registry_location(request, resource, lqs)
+            # qs = resource.location_set.all()
+            # if resource.dtype.downloadable:
+            #     qs = add_registry_location(request, resource, qs)
             yield renderer.render(
                 {
                     "name": resource.name,
                     "sha1": resource.sha1,
                     "filename": resource.filename(),
-                    "locations": serializers.LocationSerializer(qs, many=True).data,
+                    "locations": serializers.LocationSerializer(lqs, many=True).data,
                 }
             )
 

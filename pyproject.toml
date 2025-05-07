@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "django-neurobank"
-version = "0.10.10"
+version = "0.10.11"
 description = "A Django-based registry for the neurobank system"
 readme = "README.rst"
 requires-python = ">=3.10"

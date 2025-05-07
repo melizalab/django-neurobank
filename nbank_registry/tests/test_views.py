@@ -763,6 +763,34 @@ class DownloadTests(APIAuthTestCase):
             {loc["archive_name"] for loc in res_loc},
         )
 
+    def test_bulk_locations_multiple_resources(self):
+        resource, path = self._create_file(content=b"something different")
+        query = {"names": [self.resource.name, resource.name]}
+        url = reverse("neurobank:bulk-location-list")
+        response = self.client.post(url, query, format="json")
+        self.assertEqual(response.status_code, 200)
+        data = [json.loads(record) for record in response]
+        self.assertEqual(len(data), 2)
+
+    def test_bulk_locations_filter_by_archive(self):
+        archive = Archive.objects.create(
+            name="other-local", scheme="neurobank", root=""
+        )
+        resource, path = self._create_file(content=b"something different", skip_file_creation=True, archive=archive)
+        query = {"names": [self.resource.name, resource.name], "archive": archive.name}
+        url = reverse("neurobank:bulk-location-list")
+        response = self.client.post(url, query, format="json")
+        self.assertEqual(response.status_code, 200)
+        data = [json.loads(record) for record in response]
+        self.assertEqual(len(data), 1)
+        res_loc = data[0]["locations"]
+        self.assertSetEqual(
+            {archive.name},
+            {loc["archive_name"] for loc in res_loc},
+            "bulk locations should omit registry when filtering by archive name or scheme"
+        )
+
+
     def test_nginx_header(self):
         url = reverse("neurobank:resource-download", args=[self.resource])
         response = self.client.get(url)

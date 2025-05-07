@@ -12,7 +12,7 @@ class LocationInline(admin.TabularInline):
 
 
 class DataTypeAdmin(admin.ModelAdmin):
-    list_display = ("name", "content_type")
+    list_display = ("name", "content_type", "extension")
 
 
 class ArchiveAdmin(admin.ModelAdmin):
