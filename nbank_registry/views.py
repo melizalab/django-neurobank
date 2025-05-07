@@ -5,8 +5,8 @@ from urllib.parse import urlparse
 
 from django.db.models import Q
 from django.db.utils import IntegrityError
-from django.shortcuts import get_object_or_404
 from django.http import StreamingHttpResponse
+from django.shortcuts import get_object_or_404
 from django_filters import rest_framework as filters
 from django_sendfile import sendfile
 from drf_link_header_pagination import LinkHeaderPagination
@@ -28,15 +28,12 @@ from nbank_registry import (
 DOWNLOAD_ARCHIVE_NAME = "registry"
 
 
-def all_locations(resource, request):
+def add_registry_location(request, resource, qs):
     """Helper function returns an iterator over all the locations associated with
     resource. If the resource dtype is marked as downloadable, a fake loction
     that points to the registry is also included.
 
     """
-    location_set = resource.location_set.all()
-    if not resource.dtype.downloadable:
-        return location_set
     base = reverse("neurobank:resource-download-base")
     url = urlparse(request.build_absolute_uri(base))
     registry_archive = models.Archive(
@@ -45,7 +42,7 @@ def all_locations(resource, request):
         root=f"{url.netloc}{url.path}",
     )
     registry_location = models.Location(archive=registry_archive, resource=resource)
-    return itertools.chain(location_set, [registry_location])
+    return itertools.chain(qs, [registry_location])
 
 
 @api_view(["GET"])
@@ -86,6 +83,15 @@ class ArchiveFilter(filters.FilterSet):
     class Meta:
         model = models.Archive
         fields = ["name", "scheme", "root"]
+
+
+class LocationFilter(filters.FilterSet):
+    archive = filters.CharFilter(field_name="archive__name", lookup_expr="iexact")
+    scheme = filters.CharFilter(field_name="archive__scheme", lookup_expr="iexact")
+
+    class Meta:
+        model = models.Location
+        fields = ["archive", "scheme"]
 
 
 class ResourceFilter(filters.FilterSet):
@@ -204,6 +210,8 @@ class LocationList(generics.ListAPIView):
 
     serializer_class = serializers.LocationSerializer
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = LocationFilter
 
     def get_object(self):
         return get_object_or_404(models.Resource, name=self.kwargs["resource_name"])
@@ -214,8 +222,11 @@ class LocationList(generics.ListAPIView):
 
     def list(self, request, *args, **kwargs):
         resource = self.get_object()
-        queryset = all_locations(resource, request)
-        serializer = self.get_serializer(queryset, many=True)
+        f = LocationFilter(request.GET, resource.location_set.all())
+        qs = f.qs
+        if resource.dtype.downloadable and len(request.query_params) == 0:
+            qs = add_registry_location(request, resource, qs)
+        serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
 
     def post(self, request, *args, **kwargs):
@@ -299,16 +310,17 @@ def bulk_location_list(request, format=None):
         query |= Q(name=name)
     qs = models.Resource.objects.filter(query)
     renderer = JSONLRenderer()
-    gen = (
-        renderer.render(
-            {
-                "name": resource.name,
-                "sha1": resource.sha1,
-                "locations": serializers.LocationSerializer(
-                    all_locations(resource, request), many=True
-                ).data,
-            }
-        )
-        for resource in qs
-    )
-    return StreamingHttpResponse(gen)
+    def gen(qs):
+        for resource in qs:
+            qs = resource.location_set.all()
+            if resource.dtype.downloadable:
+                qs = add_registry_location(request, resource, qs)
+            yield renderer.render(
+                {
+                    "name": resource.name,
+                    "sha1": resource.sha1,
+                    "locations": serializers.LocationSerializer(qs, many=True).data,
+                }
+            )
+
+    return StreamingHttpResponse(gen(qs))

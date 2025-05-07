@@ -112,7 +112,7 @@ class ResourceTests(APIAuthTestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertNotIn(
-            self.archive_2.name, [l["archive_name"] for l in response.data]
+            self.archive_2.name, [loc["archive_name"] for loc in response.data]
         )
 
     def test_can_create_resource_with_metadata(self):
@@ -232,6 +232,18 @@ class ResourceTests(APIAuthTestCase):
                 "scheme": self.archive.scheme,
             },
         )
+
+    def test_can_filter_resource_locations(self):
+        response = self.client.get(
+            reverse("neurobank:location-list", args=[self.resource.name]), {"archive": self.archive.name}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        response = self.client.get(
+            reverse("neurobank:location-list", args=[self.resource.name]), {"archive": "no-such-archive"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 0)
 
     def test_cannot_access_nonexistent_resource_locations(self):
         response = self.client.get(

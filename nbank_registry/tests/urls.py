@@ -1,5 +1,3 @@
-from django.contrib import admin
-from django.contrib.auth import views as authviews
 from django.urls import include, re_path
 
 urlpatterns = [

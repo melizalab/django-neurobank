@@ -31,8 +31,8 @@ def location_to_path(location) -> Path:
     partial = Path(location.archive.root) / "resources" / id_stub / id
     try:
         path = resolve_extension(partial)
-    except FileNotFoundError:
-        raise errors.MissingFileError(location.resource, partial.parent)
+    except FileNotFoundError as err:
+        raise errors.MissingFileError(location.resource, partial.parent) from err
     if not path.is_file():
         raise errors.NotAFileError(location.resource, partial)
     return path
@@ -52,5 +52,5 @@ def resolve_extension(path: Path) -> Path:
     paths = path.parent.glob(f"{path.name}.*")
     try:
         return next(paths)
-    except StopIteration:
-        raise FileNotFoundError(f"resource '{path}' does not exist")
+    except StopIteration as err:
+        raise FileNotFoundError(f"resource '{path}' does not exist") from err
