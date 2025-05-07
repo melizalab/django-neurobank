@@ -4,15 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('nbank_registry', '0004_auto_20210406_1211'),
+        ("nbank_registry", "0004_auto_20210406_1211"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='datatype',
-            name='downloadable',
+            model_name="datatype",
+            name="downloadable",
             field=models.BooleanField(default=False),
         ),
     ]

@@ -6,23 +6,22 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('nbank_registry', '0001_initial'),
+        ("nbank_registry", "0001_initial"),
     ]
 
     operations = [
         migrations.RenameModel(
-            old_name='Domain',
-            new_name='Archive',
+            old_name="Domain",
+            new_name="Archive",
         ),
         migrations.RenameField(
-            model_name='location',
-            old_name='domain',
-            new_name='archive',
+            model_name="location",
+            old_name="domain",
+            new_name="archive",
         ),
         migrations.AlterUniqueTogether(
-            name='location',
-            unique_together=set([('resource', 'archive')]),
+            name="location",
+            unique_together=set([("resource", "archive")]),
         ),
     ]

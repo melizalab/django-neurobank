@@ -6,31 +6,32 @@ import nbank_registry.tools
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('nbank_registry', '0002_auto_20180511_1141'),
+        ("nbank_registry", "0002_auto_20180511_1141"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='archive',
-            options={'ordering': ['name']},
+            name="archive",
+            options={"ordering": ["name"]},
         ),
         migrations.AlterModelOptions(
-            name='datatype',
-            options={'ordering': ['name']},
+            name="datatype",
+            options={"ordering": ["name"]},
         ),
         migrations.AlterModelOptions(
-            name='location',
-            options={'ordering': ['-id']},
+            name="location",
+            options={"ordering": ["-id"]},
         ),
         migrations.AlterModelOptions(
-            name='resource',
-            options={'ordering': ['-id']},
+            name="resource",
+            options={"ordering": ["-id"]},
         ),
         migrations.AlterField(
-            model_name='resource',
-            name='name',
-            field=models.SlugField(default=nbank_registry.tools.random_id, max_length=255, unique=True),
+            model_name="resource",
+            name="name",
+            field=models.SlugField(
+                default=nbank_registry.tools.random_id, max_length=255, unique=True
+            ),
         ),
     ]

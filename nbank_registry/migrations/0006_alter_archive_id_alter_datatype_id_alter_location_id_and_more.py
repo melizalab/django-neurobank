@@ -4,30 +4,29 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('nbank_registry', '0005_datatype_downloadable'),
+        ("nbank_registry", "0005_datatype_downloadable"),
     ]
 
     operations = [
         migrations.AlterField(
-            model_name='archive',
-            name='id',
+            model_name="archive",
+            name="id",
             field=models.AutoField(primary_key=True, serialize=False),
         ),
         migrations.AlterField(
-            model_name='datatype',
-            name='id',
+            model_name="datatype",
+            name="id",
             field=models.AutoField(primary_key=True, serialize=False),
         ),
         migrations.AlterField(
-            model_name='location',
-            name='id',
+            model_name="location",
+            name="id",
             field=models.AutoField(primary_key=True, serialize=False),
         ),
         migrations.AlterField(
-            model_name='resource',
-            name='metadata',
+            model_name="resource",
+            name="metadata",
             field=models.JSONField(blank=True, null=True),
         ),
     ]

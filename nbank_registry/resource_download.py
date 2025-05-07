@@ -7,6 +7,7 @@ a location that resolves to a local path on the server. The code to resolve this
 local path has been vendored from the neurobank package.
 
 """
+
 from pathlib import Path
 
 from nbank_registry import errors

@@ -235,12 +235,14 @@ class ResourceTests(APIAuthTestCase):
 
     def test_can_filter_resource_locations(self):
         response = self.client.get(
-            reverse("neurobank:location-list", args=[self.resource.name]), {"archive": self.archive.name}
+            reverse("neurobank:location-list", args=[self.resource.name]),
+            {"archive": self.archive.name},
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         response = self.client.get(
-            reverse("neurobank:location-list", args=[self.resource.name]), {"archive": "no-such-archive"}
+            reverse("neurobank:location-list", args=[self.resource.name]),
+            {"archive": "no-such-archive"},
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 0)
@@ -459,7 +461,7 @@ class DataTypeTests(APIAuthTestCase):
         self.dtype = DataType.objects.create(
             name="spike_times",
             content_type="application/vnd.meliza-org.pproc+json; version=1.0",
-            extension="pprox"
+            extension="pprox",
         )
 
     def test_can_access_datatype_list(self):
@@ -471,7 +473,11 @@ class DataTypeTests(APIAuthTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
             response.data,
-            {"name": self.dtype.name, "content_type": self.dtype.content_type, "extension": "pprox"},
+            {
+                "name": self.dtype.name,
+                "content_type": self.dtype.content_type,
+                "extension": "pprox",
+            },
         )
 
     def test_cannot_access_nonexistent_datatype_detail(self):
@@ -480,7 +486,11 @@ class DataTypeTests(APIAuthTestCase):
 
     def test_can_create_datatype(self):
         self.login()
-        data = {"name": "acoustic_waveform", "content_type": "audio/wav", "extension": "wav"}
+        data = {
+            "name": "acoustic_waveform",
+            "content_type": "audio/wav",
+            "extension": "wav",
+        }
         response = self.client.post(reverse("neurobank:datatype-list"), data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data, data)

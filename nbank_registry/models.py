@@ -51,7 +51,11 @@ class DataType(models.Model):
     name = models.SlugField(max_length=32, unique=True)
     content_type = models.CharField(max_length=128, blank=True)
     downloadable = models.BooleanField(default=False)
-    extension = models.CharField(max_length=8, blank=True, help_text="default file extension for this data type for clients to use in naming downloaded resources")
+    extension = models.CharField(
+        max_length=8,
+        blank=True,
+        help_text="default file extension for this data type for clients to use in naming downloaded resources",
+    )
 
     def __str__(self):
         return self.name

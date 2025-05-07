@@ -310,6 +310,7 @@ def bulk_location_list(request, format=None):
         query |= Q(name=name)
     qs = models.Resource.objects.filter(query).select_related("dtype")
     renderer = JSONLRenderer()
+
     def gen(qs):
         for resource in qs:
             qs = resource.location_set.all()

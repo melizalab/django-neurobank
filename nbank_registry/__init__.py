@@ -2,6 +2,7 @@
 # -*- mode: python -*-
 try:
     from importlib.metadata import version
+
     __version__ = version("django-neurobank")
 except ImportError:
     # If package is not installed (e.g. during development)

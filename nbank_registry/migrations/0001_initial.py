@@ -12,7 +12,6 @@ import nbank_registry.tools
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
@@ -22,53 +21,138 @@ class Migration(migrations.Migration):
     operations = [
         HStoreExtension(),
         migrations.CreateModel(
-            name='DataType',
+            name="DataType",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.SlugField(max_length=32, unique=True)),
-                ('content_type', models.CharField(blank=True, max_length=128, null=True)),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("name", models.SlugField(max_length=32, unique=True)),
+                (
+                    "content_type",
+                    models.CharField(blank=True, max_length=128, null=True),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='Domain',
+            name="Domain",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('name', models.SlugField(help_text='a descriptive name', max_length=32, unique=True)),
-                ('scheme', models.CharField(max_length=16)),
-                ('root', models.CharField(help_text='root path for resources', max_length=512)),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "name",
+                    models.SlugField(
+                        help_text="a descriptive name", max_length=32, unique=True
+                    ),
+                ),
+                ("scheme", models.CharField(max_length=16)),
+                (
+                    "root",
+                    models.CharField(
+                        help_text="root path for resources", max_length=512
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='Location',
+            name="Location",
             fields=[
-                ('id', models.AutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('domain', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='nbank_registry.Domain')),
+                (
+                    "id",
+                    models.AutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                (
+                    "domain",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="nbank_registry.Domain",
+                    ),
+                ),
             ],
         ),
         migrations.CreateModel(
-            name='Resource',
+            name="Resource",
             fields=[
-                ('id', models.AutoField(primary_key=True, serialize=False)),
-                ('name', models.SlugField(default=nbank_registry.tools.random_id, max_length=64, unique=True)),
-                ('sha1', models.CharField(blank=True, help_text='specify only for resources whose contents must not change (i.e., sources)', max_length=40, null=True, unique=True)),
-                ('created_on', models.DateTimeField(auto_now_add=True)),
-                ('metadata', django.contrib.postgres.fields.hstore.HStoreField(blank=True, null=True)),
-                ('created_by', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='resources', to=settings.AUTH_USER_MODEL)),
-                ('dtype', models.ForeignKey(on_delete=django.db.models.deletion.PROTECT, to='nbank_registry.DataType')),
-                ('locations', models.ManyToManyField(through='nbank_registry.Location', to='nbank_registry.Domain')),
+                ("id", models.AutoField(primary_key=True, serialize=False)),
+                (
+                    "name",
+                    models.SlugField(
+                        default=nbank_registry.tools.random_id,
+                        max_length=64,
+                        unique=True,
+                    ),
+                ),
+                (
+                    "sha1",
+                    models.CharField(
+                        blank=True,
+                        help_text="specify only for resources whose contents must not change (i.e., sources)",
+                        max_length=40,
+                        null=True,
+                        unique=True,
+                    ),
+                ),
+                ("created_on", models.DateTimeField(auto_now_add=True)),
+                (
+                    "metadata",
+                    django.contrib.postgres.fields.hstore.HStoreField(
+                        blank=True, null=True
+                    ),
+                ),
+                (
+                    "created_by",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.CASCADE,
+                        related_name="resources",
+                        to=settings.AUTH_USER_MODEL,
+                    ),
+                ),
+                (
+                    "dtype",
+                    models.ForeignKey(
+                        on_delete=django.db.models.deletion.PROTECT,
+                        to="nbank_registry.DataType",
+                    ),
+                ),
+                (
+                    "locations",
+                    models.ManyToManyField(
+                        through="nbank_registry.Location", to="nbank_registry.Domain"
+                    ),
+                ),
             ],
         ),
         migrations.AddField(
-            model_name='location',
-            name='resource',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='nbank_registry.Resource'),
+            model_name="location",
+            name="resource",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                to="nbank_registry.Resource",
+            ),
         ),
         migrations.AlterUniqueTogether(
-            name='domain',
-            unique_together=set([('scheme', 'root')]),
+            name="domain",
+            unique_together=set([("scheme", "root")]),
         ),
         migrations.AlterUniqueTogether(
-            name='location',
-            unique_together=set([('resource', 'domain')]),
+            name="location",
+            unique_together=set([("resource", "domain")]),
         ),
     ]

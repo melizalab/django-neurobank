@@ -4,21 +4,27 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('nbank_registry', '0006_alter_archive_id_alter_datatype_id_alter_location_id_and_more'),
+        (
+            "nbank_registry",
+            "0006_alter_archive_id_alter_datatype_id_alter_location_id_and_more",
+        ),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='datatype',
-            name='extension',
-            field=models.CharField(blank=True, help_text='default filename for this data type for clients to use in naming downloaded resources', max_length=8),
+            model_name="datatype",
+            name="extension",
+            field=models.CharField(
+                blank=True,
+                help_text="default filename for this data type for clients to use in naming downloaded resources",
+                max_length=8,
+            ),
         ),
         migrations.AlterField(
-            model_name='datatype',
-            name='content_type',
-            field=models.CharField(blank=True, default='', max_length=128),
+            model_name="datatype",
+            name="content_type",
+            field=models.CharField(blank=True, default="", max_length=128),
             preserve_default=False,
         ),
     ]
