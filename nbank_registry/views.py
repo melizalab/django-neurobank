@@ -308,7 +308,7 @@ def bulk_location_list(request, format=None):
     query = Q()
     for name in request.data["names"]:
         query |= Q(name=name)
-    qs = models.Resource.objects.filter(query)
+    qs = models.Resource.objects.filter(query).select_related("dtype")
     renderer = JSONLRenderer()
     def gen(qs):
         for resource in qs:
@@ -319,6 +319,7 @@ def bulk_location_list(request, format=None):
                 {
                     "name": resource.name,
                     "sha1": resource.sha1,
+                    "filename": resource.filename(),
                     "locations": serializers.LocationSerializer(qs, many=True).data,
                 }
             )

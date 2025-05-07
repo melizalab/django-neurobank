@@ -2,6 +2,8 @@
 # -*- mode: python -*-
 from __future__ import unicode_literals
 
+from pathlib import Path
+
 from django.db import models
 
 from nbank_registry.tools import random_id
@@ -30,6 +32,14 @@ class Resource(models.Model):
     def __str__(self):
         return str(self.name)
 
+    def filename(self):
+        name = Path(self.name)
+        if not name.suffix and self.dtype.extension:
+            ext = self.dtype.extension.lstrip(".")
+            return str(name.with_suffix(f".{ext}"))
+        else:
+            return self.name
+
     class Meta:
         ordering = ["-id"]
 
@@ -39,8 +49,9 @@ class DataType(models.Model):
 
     id = models.AutoField(primary_key=True)
     name = models.SlugField(max_length=32, unique=True)
-    content_type = models.CharField(max_length=128, blank=True, null=True)
+    content_type = models.CharField(max_length=128, blank=True)
     downloadable = models.BooleanField(default=False)
+    extension = models.CharField(max_length=8, blank=True, help_text="default file extension for this data type for clients to use in naming downloaded resources")
 
     def __str__(self):
         return self.name

@@ -260,6 +260,8 @@ class ResourceTests(APIAuthTestCase):
         data = [json.loads(record) for record in response]
         self.assertEqual(len(data), 1)
         res_loc = data[0]
+        self.assertEqual(res_loc["name"], self.resource.name)
+        self.assertEqual(res_loc["filename"], self.resource.filename())
         self.assertEqual(len(res_loc["locations"]), 1)
         self.assertEqual(
             res_loc["locations"][0],
@@ -457,6 +459,7 @@ class DataTypeTests(APIAuthTestCase):
         self.dtype = DataType.objects.create(
             name="spike_times",
             content_type="application/vnd.meliza-org.pproc+json; version=1.0",
+            extension="pprox"
         )
 
     def test_can_access_datatype_list(self):
@@ -468,7 +471,7 @@ class DataTypeTests(APIAuthTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(
             response.data,
-            {"name": self.dtype.name, "content_type": self.dtype.content_type},
+            {"name": self.dtype.name, "content_type": self.dtype.content_type, "extension": "pprox"},
         )
 
     def test_cannot_access_nonexistent_datatype_detail(self):
@@ -477,7 +480,7 @@ class DataTypeTests(APIAuthTestCase):
 
     def test_can_create_datatype(self):
         self.login()
-        data = {"name": "acoustic_waveform", "content_type": "audio/wav"}
+        data = {"name": "acoustic_waveform", "content_type": "audio/wav", "extension": "wav"}
         response = self.client.post(reverse("neurobank:datatype-list"), data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data, data)

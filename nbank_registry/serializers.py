@@ -114,7 +114,7 @@ class DataTypeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DataType
-        fields = ("name", "content_type")
+        fields = ("name", "content_type", "extension")
 
 
 class ArchiveSerializer(serializers.ModelSerializer):
