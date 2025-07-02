@@ -17,17 +17,20 @@ class DataTypeAdmin(admin.ModelAdmin):
 
 class ArchiveAdmin(admin.ModelAdmin):
     list_display = ("name", "scheme", "root")
-    list_filter = ("name", "scheme")
+    list_filter = ("scheme",)
     search_fields = ("name__istartswith", "scheme__istartswith", "root__icontains")
 
 
 class ResourceAdmin(admin.ModelAdmin):
+    date_hierarchy = "created_on"
     fields = ("name", "sha1", "dtype", "metadata", "created_by")
     list_display = (
         "name",
         "dtype",
+        "created_by",
+        "created_on"
     )
-    list_filter = ("name", "dtype")
+    list_filter = ("dtype", "location__archive", "created_by",)
     search_fields = (
         "name__istartswith",
         "sha1__istartswith",
