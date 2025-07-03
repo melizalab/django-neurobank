@@ -102,6 +102,7 @@ class ResourceSerializer(serializers.ModelSerializer):
             "name",
             "sha1",
             "dtype",
+            "filename",
             "metadata",
             "locations",
             "created_by",
