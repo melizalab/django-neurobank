@@ -33,7 +33,7 @@ class ResourceAdmin(admin.ModelAdmin):
     search_fields = (
         "name__istartswith",
         "sha1__istartswith",
-        "dtype",
+        "dtype__name",
         "metadata__icontains",
     )
     inlines = (LocationInline,)
