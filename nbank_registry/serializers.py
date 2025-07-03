@@ -50,10 +50,16 @@ class ResourceSerializer(serializers.ModelSerializer):
     metadata = serializers.JSONField(required=False)
 
     def validate_sha1(self, value):
-        if self.instance is not None and self.instance.sha1 != value:
-            raise serializers.ValidationError(
-                "sha1 value cannot be updated; create a new resource"
-            )
+        """If updating, check if user has permission. Check if valid sha1"""
+        try:
+            is_superuser = self.context["request"].user.is_superuser
+        except (AttributeError, KeyError):
+            is_superuser = False
+        if self.instance is not None:
+            if not is_superuser and self.instance.sha1 != value:
+                raise serializers.ValidationError(
+                    "sha1 value cannot be updated; create a new resource"
+                )
         if value is not None and sha1_re.match(value) is None:
             raise serializers.ValidationError("invalid sha1 value")
         return value
@@ -81,6 +87,7 @@ class ResourceSerializer(serializers.ModelSerializer):
             if archive not in instance.locations:
                 Location.objects.create(resource=instance, archive=archive)
         instance.dtype = validated_data.get("dtype", instance.dtype)
+        instance.sha1 = validated_data.get("sha1", instance.sha1)
         for key, value in validated_data.get("metadata", {}).items():
             if value is not None:
                 instance.metadata[key] = value

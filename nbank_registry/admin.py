@@ -24,13 +24,12 @@ class ArchiveAdmin(admin.ModelAdmin):
 class ResourceAdmin(admin.ModelAdmin):
     date_hierarchy = "created_on"
     fields = ("name", "sha1", "dtype", "metadata", "created_by")
-    list_display = (
-        "name",
+    list_display = ("name", "dtype", "created_by", "created_on")
+    list_filter = (
         "dtype",
+        "location__archive",
         "created_by",
-        "created_on"
     )
-    list_filter = ("dtype", "location__archive", "created_by",)
     search_fields = (
         "name__istartswith",
         "sha1__istartswith",

@@ -8,7 +8,7 @@ import tempfile
 import unittest
 import uuid
 
-from django.contrib.auth.models import User
+from django.contrib.auth.models import Permission, User
 from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
@@ -316,8 +316,24 @@ class ResourceTests(APIAuthTestCase):
         )
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_cannot_modify_sha1(self):
+    def test_superuser_can_modify_sha1(self):
+        my_sha = hashlib.sha1(b"blah").hexdigest()
         self.login()
+        response = self.client.patch(
+            reverse("neurobank:resource", args=[self.resource]),
+            {"sha1": my_sha},
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["sha1"], my_sha)
+
+    def test_nonsuperuser_cannot_modify_sha1(self):
+        user = User.objects.create_user(
+            username="normal_user",
+            password=self.password,
+            email="normal-user@domain.com",
+        )
+        user.user_permissions.add(Permission.objects.get(codename="change_resource"))
+        self.client.login(username="normal_user", password=self.password)
         response = self.client.patch(
             reverse("neurobank:resource", args=[self.resource]),
             {"sha1": hashlib.sha1(b"blah").hexdigest()},
@@ -776,7 +792,9 @@ class DownloadTests(APIAuthTestCase):
         archive = Archive.objects.create(
             name="other-local", scheme="neurobank", root=""
         )
-        resource, path = self._create_file(content=b"something different", skip_file_creation=True, archive=archive)
+        resource, path = self._create_file(
+            content=b"something different", skip_file_creation=True, archive=archive
+        )
         query = {"names": [self.resource.name, resource.name], "archive": archive.name}
         url = reverse("neurobank:bulk-location-list")
         response = self.client.post(url, query, format="json")
@@ -787,9 +805,8 @@ class DownloadTests(APIAuthTestCase):
         self.assertSetEqual(
             {archive.name},
             {loc["archive_name"] for loc in res_loc},
-            "bulk locations should omit registry when filtering by archive name or scheme"
+            "bulk locations should omit registry when filtering by archive name or scheme",
         )
-
 
     def test_nginx_header(self):
         url = reverse("neurobank:resource-download", args=[self.resource])
