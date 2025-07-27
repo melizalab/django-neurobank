@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "django-neurobank"
-version = "0.10.12"
+version = "0.10.13"
 description = "A Django-based registry for the neurobank system"
 readme = "README.rst"
 requires-python = ">=3.10"
@@ -78,12 +78,6 @@ ignore = ["E221", "E501", "E701"]
 
 [tool.ruff.lint.per-file-ignores]
 "__init__.py" = ["F401"]
-
-[tool.mypy]
-python_version = "3.8"
-ignore_missing_imports = true
-strict_optional = true
-check_untyped_defs = true
 
 [tool.hatch.build]
 include = ["nbank_registry/**"]

@@ -16,8 +16,8 @@ class DataTypeAdmin(admin.ModelAdmin):
 
 
 class ArchiveAdmin(admin.ModelAdmin):
-    list_display = ("name", "scheme", "root")
-    list_filter = ("scheme",)
+    list_display = ("name", "scheme", "root", "accessibility")
+    list_filter = ("scheme", "accessibility")
     search_fields = ("name__istartswith", "scheme__istartswith", "root__icontains")
 
 

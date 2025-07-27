@@ -28,10 +28,13 @@ from nbank_registry import (
 DOWNLOAD_ARCHIVE_NAME = "registry"
 
 
-def add_registry_location(request, resource, qs):
-    """Helper function returns an iterator over all the locations associated with
-    resource. If the resource dtype is marked as downloadable, a fake loction
-    that points to the registry is also included.
+def add_virtual_registry_location(request, resource, qs):
+    """Add a virtual (non-persisted) location for registry downloads.
+
+    This creates in-memory Archive and Location instances that represent the registry's
+    download endpoint. These objects are never saved to the database but work seamlessly
+    with our serializers. This does not check whether the file actually exists; this is
+    deferred until the user tries to retrieve it.
 
     """
     base = reverse("neurobank:resource-download-base")
@@ -40,6 +43,7 @@ def add_registry_location(request, resource, qs):
         name=DOWNLOAD_ARCHIVE_NAME,
         scheme=request.scheme,
         root=f"{url.netloc}{url.path}",
+        accessibility=models.Archive.Accessibility.REMOTE,
     )
     registry_location = models.Location(archive=registry_archive, resource=resource)
     return itertools.chain(qs, [registry_location])
@@ -82,7 +86,7 @@ class ArchiveFilter(filters.FilterSet):
 
     class Meta:
         model = models.Archive
-        fields = ["name", "scheme", "root"]
+        fields = ["name", "scheme", "root", "accessibility"]
 
 
 class LocationFilter(filters.FilterSet):
@@ -222,10 +226,12 @@ class LocationList(generics.ListAPIView):
 
     def list(self, request, *args, **kwargs):
         resource = self.get_object()
-        f = LocationFilter(request.GET, resource.location_set.all())
+        f = LocationFilter(
+            request.GET, resource.location_set.order_by("archive__accessibility")
+        )
         qs = f.qs
         if resource.dtype.downloadable and len(request.query_params) == 0:
-            qs = add_registry_location(request, resource, qs)
+            qs = add_virtual_registry_location(request, resource, qs)
         serializer = self.get_serializer(qs, many=True)
         return Response(serializer.data)
 
@@ -313,14 +319,13 @@ def bulk_location_list(request, format=None):
 
     def gen(qs):
         for resource in qs:
-            lqs = LocationFilter(request.data, resource.location_set.all()).qs
+            lqs = LocationFilter(
+                request.data, resource.location_set.order_by("archive__accessibility")
+            ).qs
             if not lqs.exists():
                 continue
             if resource.dtype.downloadable and len(request.data) == 0:
-                lqs = add_registry_location(request, resource, lqs)
-            # qs = resource.location_set.all()
-            # if resource.dtype.downloadable:
-            #     qs = add_registry_location(request, resource, qs)
+                lqs = add_virtual_registry_location(request, resource, lqs)
             yield renderer.render(
                 {
                     "name": resource.name,

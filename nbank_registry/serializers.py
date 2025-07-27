@@ -18,6 +18,17 @@ class SlugField(serializers.SlugField):
     }
 
 
+class AccessibilityField(serializers.Field):
+    def to_representation(self, value):
+        return Archive.Accessibility(value).label
+
+    def to_internal_value(self, data):
+        try:
+            return Archive.Accessibility[data.upper()]
+        except (AttributeError, KeyError):
+            return Archive.Accessibility(0)
+
+
 class ResourceSerializer(serializers.ModelSerializer):
     name = SlugField(
         required=False,
@@ -134,10 +145,11 @@ class ArchiveSerializer(serializers.ModelSerializer):
             )
         ]
     )
+    accessibility = AccessibilityField(required=False)
 
     class Meta:
         model = Archive
-        fields = ("name", "scheme", "root")
+        fields = ("name", "scheme", "root", "accessibility")
 
 
 class LocationSerializer(serializers.ModelSerializer):

@@ -1,10 +1,9 @@
-# -*- coding: utf-8 -*-
 # -*- mode: python -*-
-from __future__ import unicode_literals
 
 from pathlib import Path
 
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 from nbank_registry.tools import random_id
 
@@ -67,10 +66,18 @@ class DataType(models.Model):
 class Archive(models.Model):
     """An archive defines a method and authority for locating a resource"""
 
+    class Accessibility(models.IntegerChoices):
+        LOCAL = 0, _("local")
+        REMOTE = 1, _("remote")
+        OFFLINE = 2, _("offline")
+
     id = models.AutoField(primary_key=True)
     name = models.SlugField(max_length=32, unique=True, help_text="a descriptive name")
     scheme = models.CharField(max_length=16)
     root = models.CharField(max_length=512, help_text="root path for resources")
+    accessibility = models.IntegerField(
+        choices=Accessibility.choices, default=Accessibility.LOCAL
+    )
 
     def __str__(self):
         return self.name

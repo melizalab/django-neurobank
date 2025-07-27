@@ -399,6 +399,34 @@ class LocationTests(APIAuthTestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
 
+    def test_location_list_sorted_by_accessbility(self):
+        offline_archive = Archive.objects.create(
+            name="tape",
+            scheme="tape",
+            root="tape_a:1",
+            accessibility=Archive.Accessibility.OFFLINE,
+        )
+        resource = Resource.objects.create(
+            name="an_important_file",
+            sha1=hashlib.sha1(b"12345").hexdigest(),
+            dtype=self.dtype,
+            created_by=self.user,
+            metadata={"experimenter": "dmeliza"},
+        )
+        _location_1 = Location.objects.create(
+            resource=resource,
+            archive=offline_archive,
+        )
+        _location_2 = Location.objects.create(
+            resource=resource,
+            archive=self.archive,
+        )
+        response = self.client.get(reverse("neurobank:location-list", args=[resource]))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 2)
+        self.assertEqual(response.data[0]["archive_name"], self.archive.name)
+        self.assertEqual(response.data[1]["archive_name"], offline_archive.name)
+
     def test_location_list_404_invalid_resource(self):
         response = self.client.get(reverse("neurobank:location-list", args=["adsadf"]))
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
@@ -550,6 +578,7 @@ class ArchiveTests(APIAuthTestCase):
                 "name": self.archive.name,
                 "scheme": self.archive.scheme,
                 "root": self.archive.root,
+                "accessibility": "local",  # default
             },
         )
 
@@ -559,7 +588,12 @@ class ArchiveTests(APIAuthTestCase):
 
     def test_can_create_archive(self):
         self.login()
-        data = {"name": "remote", "scheme": "http", "root": "/meliza.org/spike_times/"}
+        data = {
+            "name": "remote",
+            "scheme": "http",
+            "root": "/meliza.org/spike_times/",
+            "accessibility": "remote",
+        }
         response = self.client.post(reverse("neurobank:archive-list"), data)
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data, data)
