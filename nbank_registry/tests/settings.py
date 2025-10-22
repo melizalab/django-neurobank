@@ -51,5 +51,6 @@ TEMPLATES = [
     },
 ]
 
+USE_TZ = True
 DEBUG = True
 ROOT_URLCONF = "nbank_registry.tests.urls"
