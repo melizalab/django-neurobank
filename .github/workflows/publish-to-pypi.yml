@@ -1,8 +1,10 @@
 name: Build and publish distribution to pypi
+on:
+  push:
+    branches:
+      - master
 
-on: push
-
-jobs:
+      jobs:
   build:
     name: Build distribution
     runs-on: ubuntu-latest
