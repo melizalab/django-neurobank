@@ -4,7 +4,7 @@ on:
     branches:
       - master
 
-      jobs:
+jobs:
   build:
     name: Build distribution
     runs-on: ubuntu-latest
