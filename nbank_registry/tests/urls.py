@@ -1,6 +1,6 @@
-from django.urls import include, re_path
+from django.urls import include, path
 
 urlpatterns = [
-    re_path(r"^neurobank/", include("nbank_registry.urls")),
-    re_path(r"^accounts/api-auth/", include("rest_framework.urls")),
+    path("^neurobank/", include("nbank_registry.urls")),
+    path("^accounts/api-auth/", include("rest_framework.urls")),
 ]
