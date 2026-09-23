@@ -107,5 +107,8 @@ Recommend using `uv <https://docs.astral.sh/uv/>`__ for development.
 Run ``uv sync`` to create a virtual environment and install
 dependencies. ``uv sync --no-dev --frozen`` for deployment.
 
-Testing: ``uv run pytest``. Requires a test database, will use settings
-from ``inventory/test/settings.py``.
+Testing: ``uv run pytest``. Settings are in
+``nbank_registry/tests/settings.py``. By default tests run against an
+in-memory sqlite database. To test against postgres (as CI does), run
+``uv sync --group postgres`` and set ``NBANK_TEST_DB=postgres`` (see
+``settings.py`` for connection env vars).
