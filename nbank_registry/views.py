@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # -*- mode: python -*-
 import itertools
+import json
 from urllib.parse import urlparse
 
 from django.db.models import Q
@@ -147,7 +148,12 @@ class ResourceList(generics.ListCreateAPIView):
         mf = {}
         me = {}
         for k, v in self.request.GET.items():
+            # try to parse the value as json, which will convert numeric values
             if k.startswith("metadata__"):
+                try:
+                    v = json.loads(v)
+                except json.decoder.JSONDecodeError:
+                    pass
                 if k.endswith("__neq"):
                     me[k[:-5]] = v
                 else:

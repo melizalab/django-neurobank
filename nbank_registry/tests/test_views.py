@@ -678,12 +678,19 @@ class ResourceFilterTests(APIAuthTestCase):
             sha1=hashlib.sha1(b"").hexdigest(),
             dtype=self.dtype1,
             created_by=self.user,
-            metadata={"experimenter": "dmeliza"},
+            metadata={
+                "experimenter": "dmeliza",
+                "int_val": 5,
+                "float_val": 3.12,
+                "strint_val": "10",
+            },
         )
         Location.objects.create(resource=self.resource1, archive=self.archive_local)
         Location.objects.create(resource=self.resource1, archive=self.archive_remote)
         self.resource2 = Resource.objects.create(
-            dtype=self.dtype2, created_by=self.user, metadata={"experimenter": "mcb2x"}
+            dtype=self.dtype2,
+            created_by=self.user,
+            metadata={"experimenter": "mcb2x", "int_val": 7, "float_val": -0.123},
         )
         Location.objects.create(resource=self.resource2, archive=self.archive_local)
 
@@ -743,6 +750,38 @@ class ResourceFilterTests(APIAuthTestCase):
     def test_can_exclude_by_metadata(self):
         response = self.client.get(
             reverse("neurobank:resource-list"), {"metadata__experimenter__neq": "mcb2x"}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["name"], str(self.resource1))
+
+    def test_can_filter_by_numeric_value(self):
+        response = self.client.get(
+            reverse("neurobank:resource-list"), {"metadata__int_val": 5}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["name"], str(self.resource1))
+
+    def test_can_filter_int_by_nonequality(self):
+        response = self.client.get(
+            reverse("neurobank:resource-list"), {"metadata__int_val__gt": 5}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["name"], str(self.resource2))
+
+    def test_can_filter_float_by_nonequality(self):
+        response = self.client.get(
+            reverse("neurobank:resource-list"), {"metadata__float_val__lte": 0}
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["name"], str(self.resource2))
+
+    def test_can_filter_string_encoded_numeric_value(self):
+        response = self.client.get(
+            reverse("neurobank:resource-list"), {"metadata__strint_val": r'"10"'}
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
