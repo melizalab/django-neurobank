@@ -11,10 +11,20 @@ from nbank_registry.models import Archive, DataType, Location, Resource
 
 sha1_re = re.compile(r"[0-9a-fA-F]{40}")
 
+SLUG_ERROR_MESSAGES = {
+    "invalid": "can only contain letters, numbers, underscores, and hyphens"
+}
 
-class SlugField(serializers.SlugField):
-    default_error_messages = {
-        "invalid": "can only contain letters, numbers, underscores, and hyphens"
+
+def unique_name_kwargs(model, message):
+    """extra_kwargs for a unique slug name with custom messages.
+
+    Keeps the max_length and other settings that ModelSerializer takes from
+    the model field.
+    """
+    return {
+        "error_messages": SLUG_ERROR_MESSAGES,
+        "validators": [UniqueValidator(queryset=model.objects.all(), message=message)],
     }
 
 
@@ -30,15 +40,6 @@ class AccessibilityField(serializers.Field):
 
 
 class ResourceSerializer(serializers.ModelSerializer):
-    name = SlugField(
-        required=False,
-        validators=[
-            UniqueValidator(
-                queryset=Resource.objects.all(),
-                message="a resource with this name already exists",
-            )
-        ],
-    )
     dtype = serializers.SlugRelatedField(
         queryset=DataType.objects.all(),
         slug_field="name",
@@ -125,13 +126,22 @@ class ResourceSerializer(serializers.ModelSerializer):
             "created_by",
             "created_on",
         )
+        extra_kwargs = {
+            "name": unique_name_kwargs(
+                Resource, "a resource with this name already exists"
+            )
+        }
 
 
 class DataTypeSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = DataType
         fields = ("name", "content_type", "extension")
+        extra_kwargs = {
+            "name": unique_name_kwargs(
+                DataType, "a dtype with this name already exists"
+            )
+        }
 
 
 class ArchiveSerializer(serializers.ModelSerializer):
@@ -140,6 +150,11 @@ class ArchiveSerializer(serializers.ModelSerializer):
     class Meta:
         model = Archive
         fields = ("name", "scheme", "root", "accessibility")
+        extra_kwargs = {
+            "name": unique_name_kwargs(
+                Archive, "an archive with this name already exists"
+            )
+        }
 
 
 class LocationSerializer(serializers.ModelSerializer):

@@ -102,9 +102,7 @@ class TestResource:
             reverse("neurobank:location-list", args=[self.resource])
         )
         assert response.status_code == status.HTTP_200_OK
-        assert self.archive_2.name not in [
-            loc["archive_name"] for loc in response.data
-        ]
+        assert self.archive_2.name not in [loc["archive_name"] for loc in response.data]
 
     def test_can_create_resource_with_metadata(self, auth_client):
         myuuid = str(uuid.uuid4())
@@ -120,7 +118,9 @@ class TestResource:
         assert response2.data["metadata"] == mdata
 
     @pytest.mark.parametrize("bad_meta", ["bare_string", 5])
-    def test_cannot_create_resource_with_nonobject_metadata(self, auth_client, bad_meta):
+    def test_cannot_create_resource_with_nonobject_metadata(
+        self, auth_client, bad_meta
+    ):
         myuuid = str(uuid.uuid4())
         response = auth_client.post(
             reverse("neurobank:resource-list"),
@@ -128,7 +128,7 @@ class TestResource:
             format="json",
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
-        
+
     def test_can_create_resource_with_location(self, auth_client):
         response = auth_client.post(
             reverse("neurobank:resource-list"),
@@ -151,9 +151,7 @@ class TestResource:
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_can_access_resource_detail(self, client):
-        response = client.get(
-            reverse("neurobank:resource", args=[self.resource.name])
-        )
+        response = client.get(reverse("neurobank:resource", args=[self.resource.name]))
         assert response.status_code == status.HTTP_200_OK
         assert response.data == response.data | {
             "name": str(self.resource),
@@ -235,9 +233,7 @@ class TestResource:
         assert len(response.data) == 0
 
     def test_cannot_access_nonexistent_resource_locations(self, client):
-        response = client.get(
-            reverse("neurobank:location-list", args=["argle-bargle"])
-        )
+        response = client.get(reverse("neurobank:location-list", args=["argle-bargle"]))
         assert response.status_code == status.HTTP_404_NOT_FOUND
 
     def test_bulk_access_resource_locations(self, client):
@@ -260,7 +256,9 @@ class TestResource:
         }
 
     @pytest.mark.parametrize("bad_names", INVALID_BULK_NAMES)
-    def test_cannot_bulk_access_resource_locations_with_bad_names(self, client, bad_names):
+    def test_cannot_bulk_access_resource_locations_with_bad_names(
+        self, client, bad_names
+    ):
         query = {"names": bad_names}
         response = client.post(
             reverse("neurobank:bulk-location-list"), query, format="json"
@@ -275,9 +273,7 @@ class TestResource:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_cannot_anonymously_delete_resource(self, client):
-        response = client.delete(
-            reverse("neurobank:resource", args=[self.resource])
-        )
+        response = client.delete(reverse("neurobank:resource", args=[self.resource]))
         assert response.status_code == status.HTTP_403_FORBIDDEN
 
     def test_can_delete_resource(self, auth_client):
@@ -330,10 +326,9 @@ class TestResource:
             format="json",
         )
         assert response.status_code == status.HTTP_200_OK
-        assert (
-            response.data["metadata"]
-            == response.data["metadata"] | {"test_field": "value"}
-        )
+        assert response.data["metadata"] == response.data["metadata"] | {
+            "test_field": "value"
+        }
 
     @pytest.mark.skip(reason="not implemented")
     def test_can_dry_run_create_resource(self, auth_client):
@@ -373,9 +368,7 @@ class TestLocation:
         )
 
     def test_location_list(self, client):
-        response = client.get(
-            reverse("neurobank:location-list", args=[self.resource])
-        )
+        response = client.get(reverse("neurobank:location-list", args=[self.resource]))
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 1
 
@@ -435,17 +428,17 @@ class TestLocation:
             reverse("neurobank:location-list", args=[self.resource]),
             {"archive_name": self.archive.name},
         )
-        assert response.status_code == status.HTTP_400_BAD_REQUEST, (
-            "should not be able to add duplicate archive to resource locations"
-        )
+        assert (
+            response.status_code == status.HTTP_400_BAD_REQUEST
+        ), "should not be able to add duplicate archive to resource locations"
 
     def test_can_delete_location(self, auth_client):
         response = auth_client.delete(
             reverse("neurobank:location", args=[self.resource.name, self.archive])
         )
-        assert response.status_code == status.HTTP_204_NO_CONTENT, (
-            "unable to delete a location"
-        )
+        assert (
+            response.status_code == status.HTTP_204_NO_CONTENT
+        ), "unable to delete a location"
 
         response = auth_client.get(
             reverse("neurobank:location-list", args=[self.resource])
@@ -462,9 +455,9 @@ class TestLocation:
             {"archive_name": new_archive.name},
             format="json",
         )
-        assert response.status_code == status.HTTP_201_CREATED, (
-            "unable to add location to resource"
-        )
+        assert (
+            response.status_code == status.HTTP_201_CREATED
+        ), "unable to add location to resource"
         assert self.resource.locations.count() == 2
 
 
@@ -505,9 +498,7 @@ class TestDataType:
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data == data
 
-        response2 = auth_client.get(
-            reverse("neurobank:datatype", args=[data["name"]])
-        )
+        response2 = auth_client.get(reverse("neurobank:datatype", args=[data["name"]]))
         assert response2.status_code == status.HTTP_200_OK
         assert response2.data == data
 
@@ -531,9 +522,7 @@ class TestDataType:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_cannot_delete_datatype(self, auth_client):
-        response = auth_client.delete(
-            reverse("neurobank:datatype", args=[self.dtype])
-        )
+        response = auth_client.delete(reverse("neurobank:datatype", args=[self.dtype]))
         assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
 
     def test_cannot_modify_datatype(self, auth_client):
@@ -580,9 +569,7 @@ class TestArchive:
         assert response.status_code == status.HTTP_201_CREATED
         assert response.data == data
 
-        response2 = auth_client.get(
-            reverse("neurobank:archive", args=[data["name"]])
-        )
+        response2 = auth_client.get(reverse("neurobank:archive", args=[data["name"]]))
         assert response2.status_code == status.HTTP_200_OK
         assert response2.data == data
 
@@ -606,9 +593,7 @@ class TestArchive:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
     def test_cannot_delete_archive(self, auth_client):
-        response = auth_client.delete(
-            reverse("neurobank:archive", args=[self.archive])
-        )
+        response = auth_client.delete(reverse("neurobank:archive", args=[self.archive]))
         assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
 
     def test_can_modify_archive(self, auth_client):
@@ -827,8 +812,8 @@ class TestDownload:
             metadata={"experimenter": "dmeliza"},
         )
         Location.objects.create(resource=resource, archive=archive)
-        fs_path = self.directory / "resources" / resource.name[0:2] / (
-            resource.name + ".bin"
+        fs_path = (
+            self.directory / "resources" / resource.name[0:2] / (resource.name + ".bin")
         )
         if not skip_file_creation:
             fs_path.parent.mkdir(parents=True, exist_ok=True)
@@ -881,9 +866,9 @@ class TestDownload:
         data = [json.loads(record) for record in response]
         assert len(data) == 1
         res_loc = data[0]["locations"]
-        assert {archive.name} == {loc["archive_name"] for loc in res_loc}, (
-            "bulk locations should omit registry when filtering by archive name or scheme"
-        )
+        assert (
+            {archive.name} == {loc["archive_name"] for loc in res_loc}
+        ), "bulk locations should omit registry when filtering by archive name or scheme"
 
     def test_nginx_header(self, client):
         url = reverse("neurobank:resource-download", args=[self.resource])
@@ -908,9 +893,7 @@ class TestDownload:
             b"non-donwloadable", dtype=non_downloadable_dtype
         )
 
-        url = reverse(
-            "neurobank:resource-download", args=[non_downloadable_resource]
-        )
+        url = reverse("neurobank:resource-download", args=[non_downloadable_resource])
         response = client.get(url)
         assert response.status_code == 415
         url = reverse("neurobank:resource", args=[non_downloadable_resource])
