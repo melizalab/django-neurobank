@@ -80,6 +80,12 @@ class ResourceSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("name cannot be updated")
         return value
 
+    def validate_metadata(self, value):
+        """Ensure that the metadata is a dict"""
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("metadata must be a dictionary")
+        return value
+
     def create(self, validated_data):
         archives = validated_data.pop("locations", [])
         resource = Resource.objects.create(**validated_data)

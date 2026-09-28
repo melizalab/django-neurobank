@@ -119,6 +119,16 @@ class TestResource:
         assert response2.status_code == status.HTTP_200_OK
         assert response2.data["metadata"] == mdata
 
+    @pytest.mark.parametrize("bad_meta", ["bare_string", 5])
+    def test_cannot_create_resource_with_nonobject_metadata(self, auth_client, bad_meta):
+        myuuid = str(uuid.uuid4())
+        response = auth_client.post(
+            reverse("neurobank:resource-list"),
+            {"dtype": self.dtype.name, "name": myuuid, "metadata": bad_meta},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        
     def test_can_create_resource_with_location(self, auth_client):
         response = auth_client.post(
             reverse("neurobank:resource-list"),
