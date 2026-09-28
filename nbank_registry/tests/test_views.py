@@ -17,6 +17,14 @@ from nbank_registry.views import DOWNLOAD_ARCHIVE_NAME
 
 pytestmark = pytest.mark.django_db
 
+# DataType and Archive names are both 32-character SlugFields
+INVALID_SLUG_NAMES = [
+    pytest.param("a" * 33, id="too-long"),
+    pytest.param("bad name", id="contains-space"),
+    pytest.param("bad!name", id="contains-punctuation"),
+    pytest.param("bad.name", id="contains-period"),
+]
+
 
 class TestResource:
     @pytest.fixture(autouse=True)
@@ -489,9 +497,10 @@ class TestDataType:
         assert response2.status_code == status.HTTP_200_OK
         assert response2.data == data
 
-    def test_datatype_name_length_error(self, auth_client):
+    @pytest.mark.parametrize("bad_name", INVALID_SLUG_NAMES)
+    def test_cannot_create_datatype_with_invalid_name(self, auth_client, bad_name):
         data = {
-            "name": "an_extremely_long_and_illegal_name_for_a_datatype_that_is_way_more_than_32_characters",
+            "name": bad_name,
             "content_type": "audio/wav",
             "extension": "wav",
         }
@@ -572,9 +581,10 @@ class TestArchive:
         response = auth_client.post(reverse("neurobank:archive-list"), data)
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_cannot_create_badly_named_archive(self, auth_client):
+    @pytest.mark.parametrize("bad_name", INVALID_SLUG_NAMES)
+    def test_cannot_create_archive_with_invalid_name(self, auth_client, bad_name):
         data = {
-            "name": "blargh!!@!#",
+            "name": bad_name,
             "scheme": "http",
             "root": "/meliza.org/spike_times/",
         }
