@@ -545,6 +545,26 @@ class DataTypeTests(APIAuthTestCase):
         self.assertEqual(response2.status_code, status.HTTP_200_OK)
         self.assertEqual(response2.data, data)
 
+    def test_datatype_name_length_error(self):
+        self.login()
+        data = {
+            "name": "an_extremely_long_and_illegal_name_for_a_datatype_that_is_way_more_than_32_characters",
+            "content_type": "audio/wav",
+            "extension": "wav",
+        }
+        response = self.client.post(reverse("neurobank:datatype-list"), data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_cannot_create_duplicate_datatype(self):
+        self.login()
+        data = {
+            "name": self.dtype.name,
+            "content_type": self.dtype.content_type,
+            "extension": "pprox",
+        }
+        response = self.client.post(reverse("neurobank:datatype-list"), data)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_cannot_delete_datatype(self):
         self.login()
         response = self.client.delete(reverse("neurobank:datatype", args=[self.dtype]))
@@ -622,6 +642,7 @@ class ArchiveTests(APIAuthTestCase):
         response = self.client.post(reverse("neurobank:archive-list"), data)
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+        
     def test_cannot_delete_archive(self):
         self.login()
         response = self.client.delete(reverse("neurobank:archive", args=[self.archive]))

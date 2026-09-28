@@ -122,14 +122,6 @@ class ResourceSerializer(serializers.ModelSerializer):
 
 
 class DataTypeSerializer(serializers.ModelSerializer):
-    name = SlugField(
-        validators=[
-            UniqueValidator(
-                queryset=DataType.objects.all(),
-                message="a dtype with this name already exists",
-            )
-        ]
-    )
 
     class Meta:
         model = DataType
@@ -137,14 +129,6 @@ class DataTypeSerializer(serializers.ModelSerializer):
 
 
 class ArchiveSerializer(serializers.ModelSerializer):
-    name = SlugField(
-        validators=[
-            UniqueValidator(
-                queryset=Archive.objects.all(),
-                message="an archive with this name already exists",
-            )
-        ]
-    )
     accessibility = AccessibilityField(required=False)
 
     class Meta:
