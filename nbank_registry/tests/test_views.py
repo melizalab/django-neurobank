@@ -720,6 +720,14 @@ class TestResourceFilter:
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 2
 
+    def test_can_filter_by_no_location(self, client):
+        response = client.get(
+            reverse("neurobank:resource-list"),
+            {"has_location": False},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 0
+
     def test_can_filter_by_scheme(self, client):
         response = client.get(
             reverse("neurobank:resource-list"),

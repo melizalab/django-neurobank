@@ -100,10 +100,12 @@ class LocationFilter(filters.FilterSet):
 
 
 class ResourceFilter(filters.FilterSet):
+    # TODO: consider changing some of these to exact by default
     name = filters.CharFilter(field_name="name", lookup_expr="icontains")
     sha1 = filters.CharFilter(field_name="sha1", lookup_expr="icontains")
     dtype = filters.CharFilter(field_name="dtype__name", lookup_expr="icontains")
     location = filters.CharFilter(field_name="locations__name", lookup_expr="icontains")
+    has_location = filters.BooleanFilter(field_name="locations", lookup_expr="isnull", exclude=True)
     created_by = filters.CharFilter(
         field_name="created_by__username", lookup_expr="icontains"
     )
