@@ -271,18 +271,21 @@ class LocationDetail(generics.RetrieveDestroyAPIView):
 
 
 def check_bulk_args(request):
+    """Parse bulk arguments.
+
+    Returns a list of names or raises ValueError with a detailed error message for the
+    response.
+
+    """
     try:
         names = request.data["names"]
     except KeyError:
-        return Response(
-            {"detail": "usage: {'names': ['id1', 'id2', ...]}"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        raise ValueError("usage: {'names': ['id1', 'id2', ...]}")
+    if not isinstance(names, list):
+        raise ValueError("'names' must be a list of names")
     if len(names) == 0:
-        return Response(
-            {"detail": "must supply at least one name"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        raise ValueError("must supply at least one name")
+    return names
 
 
 class JSONLRenderer(JSONRenderer):
@@ -297,10 +300,12 @@ def bulk_resource_list(request, format=None):
     Streams results as line-delimited JSON records.
 
     """
-    if (resp := check_bulk_args(request)) is not None:
-        return resp
+    try:
+        names = check_bulk_args(request)
+    except ValueError as err:
+        return Response({"detail": str(err)}, status=status.HTTP_400_BAD_REQUEST)
     query = Q()
-    for name in request.data["names"]:
+    for name in names:
         query |= Q(name=name)
     qs = models.Resource.objects.filter(query)
     renderer = JSONLRenderer()
@@ -315,10 +320,13 @@ def bulk_location_list(request, format=None):
     Streams results as line-delimited JSON records.
 
     """
-    if (resp := check_bulk_args(request)) is not None:
-        return resp
+    try:
+        names = check_bulk_args(request)
+    except ValueError as err:
+        return Response({"detail": str(err)}, status=status.HTTP_400_BAD_REQUEST)
+    request.data.pop("names")
     query = Q()
-    for name in request.data.pop("names"):
+    for name in names:
         query |= Q(name=name)
     qs = models.Resource.objects.filter(query).select_related("dtype")
     renderer = JSONLRenderer()

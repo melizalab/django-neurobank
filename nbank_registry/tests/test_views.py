@@ -24,6 +24,8 @@ INVALID_SLUG_NAMES = [
     pytest.param("bad!name", id="contains-punctuation"),
     pytest.param("bad.name", id="contains-period"),
 ]
+# Bulk access requires a list of names
+INVALID_BULK_NAMES = [[], "bare string", 5]
 
 
 class TestResource:
@@ -180,8 +182,9 @@ class TestResource:
             "locations": [self.archive.name],
         }
 
-    def test_cannot_bulk_access_resource_with_empty_list(self, client):
-        query = {"names": []}
+    @pytest.mark.parametrize("bad_names", INVALID_BULK_NAMES)
+    def test_cannot_bulk_access_resource_with_bad_names(self, client, bad_names):
+        query = {"names": bad_names}
         response = client.post(
             reverse("neurobank:bulk-resource-list"), query, format="json"
         )
@@ -246,8 +249,9 @@ class TestResource:
             "scheme": self.archive.scheme,
         }
 
-    def test_cannot_bulk_access_resource_locations_with_empty_list(self, client):
-        query = {"names": []}
+    @pytest.mark.parametrize("bad_names", INVALID_BULK_NAMES)
+    def test_cannot_bulk_access_resource_locations_with_bad_names(self, client, bad_names):
+        query = {"names": bad_names}
         response = client.post(
             reverse("neurobank:bulk-location-list"), query, format="json"
         )
