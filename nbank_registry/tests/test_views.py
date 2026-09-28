@@ -5,38 +5,23 @@ import json
 import os
 import posixpath as ppath
 import tempfile
-import unittest
 import uuid
 
+import pytest
 from django.contrib.auth.models import Permission, User
-from django.test import override_settings
 from django.urls import reverse
 from rest_framework import status
-from rest_framework.test import APITestCase
 
 from nbank_registry.models import Archive, DataType, Location, Resource
 from nbank_registry.views import DOWNLOAD_ARCHIVE_NAME
 
-
-class APIAuthTestCase(APITestCase):
-    username = "user"
-    password = "password1"
-
-    def login(self):
-        self.client.login(username=self.username, password=self.password)
-
-    def logout(self):
-        self.client.logout()
-
-    def setUp(self):
-        self.user = User.objects.create_superuser(
-            username=self.username, password=self.password, email="user@domain.com"
-        )
+pytestmark = pytest.mark.django_db
 
 
-class ResourceTests(APIAuthTestCase):
-    def setUp(self):
-        super(ResourceTests, self).setUp()
+class TestResource:
+    @pytest.fixture(autouse=True)
+    def setup(self, user):
+        self.user = user
         self.dtype = DataType.objects.create(
             name="spike_times",
             content_type="application/vnd.meliza-org.pprox+json; version=1.0",
@@ -57,47 +42,43 @@ class ResourceTests(APIAuthTestCase):
             resource=self.resource, archive=self.archive
         )
 
-    def test_can_access_resource_list(self):
-        response = self.client.get(reverse("neurobank:resource-list"))
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+    def test_can_access_resource_list(self, client):
+        response = client.get(reverse("neurobank:resource-list"))
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_can_create_resource(self):
-        self.login()
-        response = self.client.post(
+    def test_can_create_resource(self, auth_client):
+        response = auth_client.post(
             reverse("neurobank:resource-list"),
             {
                 "dtype": self.dtype.name,
             },
         )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        response2 = self.client.get(
+        assert response.status_code == status.HTTP_201_CREATED
+        response2 = auth_client.get(
             reverse("neurobank:resource", args=[response.data["name"]])
         )
-        self.assertEqual(response2.status_code, status.HTTP_200_OK)
+        assert response2.status_code == status.HTTP_200_OK
 
-    def test_can_create_resource_with_own_name(self):
-        self.login()
+    def test_can_create_resource_with_own_name(self, auth_client):
         myuuid = str(uuid.uuid4())
-        response = self.client.post(
+        response = auth_client.post(
             reverse("neurobank:resource-list"),
             {"dtype": self.dtype.name, "name": myuuid},
         )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        response2 = self.client.get(reverse("neurobank:resource", args=[myuuid]))
-        self.assertEqual(response2.status_code, status.HTTP_200_OK)
+        assert response.status_code == status.HTTP_201_CREATED
+        response2 = auth_client.get(reverse("neurobank:resource", args=[myuuid]))
+        assert response2.status_code == status.HTTP_200_OK
 
-    def test_cannot_create_resource_with_invalid_name(self):
-        self.login()
+    def test_cannot_create_resource_with_invalid_name(self, auth_client):
         bad_name = "blah/blah"
-        response = self.client.post(
+        response = auth_client.post(
             reverse("neurobank:resource-list"),
             {"dtype": self.dtype.name, "name": bad_name},
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_cannot_create_resource_with_duplicate_name(self):
-        self.login()
-        response = self.client.post(
+    def test_cannot_create_resource_with_duplicate_name(self, auth_client):
+        response = auth_client.post(
             reverse("neurobank:resource-list"),
             {
                 "dtype": self.dtype.name,
@@ -105,275 +86,252 @@ class ResourceTests(APIAuthTestCase):
                 "locations": [self.archive_2.name],
             },
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
         # check that the location was not created (database should roll back on error)
-        response = self.client.get(
+        response = auth_client.get(
             reverse("neurobank:location-list", args=[self.resource])
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertNotIn(
-            self.archive_2.name, [loc["archive_name"] for loc in response.data]
-        )
+        assert response.status_code == status.HTTP_200_OK
+        assert self.archive_2.name not in [
+            loc["archive_name"] for loc in response.data
+        ]
 
-    def test_can_create_resource_with_metadata(self):
-        self.login()
+    def test_can_create_resource_with_metadata(self, auth_client):
         myuuid = str(uuid.uuid4())
         mdata = {"blah": "1234"}
-        response = self.client.post(
+        response = auth_client.post(
             reverse("neurobank:resource-list"),
             {"dtype": self.dtype.name, "name": myuuid, "metadata": mdata},
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        response2 = self.client.get(reverse("neurobank:resource", args=[myuuid]))
-        self.assertEqual(response2.status_code, status.HTTP_200_OK)
-        self.assertDictEqual(response2.data["metadata"], mdata)
+        assert response.status_code == status.HTTP_201_CREATED
+        response2 = auth_client.get(reverse("neurobank:resource", args=[myuuid]))
+        assert response2.status_code == status.HTTP_200_OK
+        assert response2.data["metadata"] == mdata
 
-    def test_can_create_resource_with_location(self):
-        self.login()
-        response = self.client.post(
+    def test_can_create_resource_with_location(self, auth_client):
+        response = auth_client.post(
             reverse("neurobank:resource-list"),
             {"dtype": self.dtype.name, "locations": [self.archive.name]},
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(
-            response.data, response.data | {"locations": [self.archive.name]}
-        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data == response.data | {"locations": [self.archive.name]}
 
-    def test_cannot_create_resource_with_invalid_location(self):
-        self.login()
+    def test_cannot_create_resource_with_invalid_location(self, auth_client):
         myuuid = str(uuid.uuid4())
-        response = self.client.post(
+        response = auth_client.post(
             reverse("neurobank:resource-list"),
             {"dtype": self.dtype.name, "name": myuuid, "locations": ["bad-location"]},
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
         # check that resource was not created
-        response = self.client.get(reverse("neurobank:resource", args=[myuuid]))
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        response = auth_client.get(reverse("neurobank:resource", args=[myuuid]))
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_can_access_resource_detail(self):
-        response = self.client.get(
+    def test_can_access_resource_detail(self, client):
+        response = client.get(
             reverse("neurobank:resource", args=[self.resource.name])
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(
-            response.data,
-            response.data
-            | {
-                "name": str(self.resource),
-                "sha1": self.resource.sha1,
-                "dtype": self.dtype.name,
-                "filename": self.resource.filename(),
-                "created_by": self.user.username,
-                "metadata": self.resource.metadata,
-                "locations": [self.archive.name],
-            },
-        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data == response.data | {
+            "name": str(self.resource),
+            "sha1": self.resource.sha1,
+            "dtype": self.dtype.name,
+            "filename": self.resource.filename(),
+            "created_by": self.user.username,
+            "metadata": self.resource.metadata,
+            "locations": [self.archive.name],
+        }
 
-    def test_cannot_access_nonexistent_resource_detail(self):
-        response = self.client.get(reverse("neurobank:resource", args=[uuid.uuid4()]))
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+    def test_cannot_access_nonexistent_resource_detail(self, client):
+        response = client.get(reverse("neurobank:resource", args=[uuid.uuid4()]))
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_cannot_access_invalid_resource_detail(self):
+    def test_cannot_access_invalid_resource_detail(self, client):
         url = ppath.join(reverse("neurobank:resource-list"), "not.a.slug") + "/"
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        response = client.get(url)
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_can_bulk_access_resource_detail(self):
+    def test_can_bulk_access_resource_detail(self, client):
         query = {"names": [self.resource.name]}
-        response = self.client.post(
+        response = client.post(
             reverse("neurobank:bulk-resource-list"), query, format="json"
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        assert response.status_code == status.HTTP_200_OK
         data = [json.loads(record) for record in response]
-        self.assertEqual(len(data), 1)
-        self.assertEqual(
-            data[0],
-            data[0]
-            | {
-                "name": str(self.resource),
-                "sha1": self.resource.sha1,
-                "dtype": self.dtype.name,
-                "filename": self.resource.filename(),
-                "created_by": self.user.username,
-                "metadata": self.resource.metadata,
-                "locations": [self.archive.name],
-            },
-        )
+        assert len(data) == 1
+        assert data[0] == data[0] | {
+            "name": str(self.resource),
+            "sha1": self.resource.sha1,
+            "dtype": self.dtype.name,
+            "filename": self.resource.filename(),
+            "created_by": self.user.username,
+            "metadata": self.resource.metadata,
+            "locations": [self.archive.name],
+        }
 
-    def test_cannot_bulk_access_resource_with_empty_list(self):
+    def test_cannot_bulk_access_resource_with_empty_list(self, client):
         query = {"names": []}
-        response = self.client.post(
+        response = client.post(
             reverse("neurobank:bulk-resource-list"), query, format="json"
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_bulk_access_resource_with_bad_request(self):
+    def test_bulk_access_resource_with_bad_request(self, client):
         query = {"something_wrong": [self.resource.name]}
-        response = self.client.post(
+        response = client.post(
             reverse("neurobank:bulk-resource-list"), query, format="json"
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_can_access_resource_locations(self):
-        response = self.client.get(
+    def test_can_access_resource_locations(self, client):
+        response = client.get(
             reverse("neurobank:location-list", args=[self.resource.name])
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(
-            response.data[0],
-            response.data[0]
-            | {
-                "archive_name": self.archive.name,
-                "resource_name": self.resource.name,
-                "root": self.archive.root,
-                "scheme": self.archive.scheme,
-            },
-        )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0] == response.data[0] | {
+            "archive_name": self.archive.name,
+            "resource_name": self.resource.name,
+            "root": self.archive.root,
+            "scheme": self.archive.scheme,
+        }
 
-    def test_can_filter_resource_locations(self):
-        response = self.client.get(
+    def test_can_filter_resource_locations(self, client):
+        response = client.get(
             reverse("neurobank:location-list", args=[self.resource.name]),
             {"archive": self.archive.name},
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        response = self.client.get(
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        response = client.get(
             reverse("neurobank:location-list", args=[self.resource.name]),
             {"archive": "no-such-archive"},
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 0)
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 0
 
-    def test_cannot_access_nonexistent_resource_locations(self):
-        response = self.client.get(
+    def test_cannot_access_nonexistent_resource_locations(self, client):
+        response = client.get(
             reverse("neurobank:location-list", args=["argle-bargle"])
         )
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_bulk_access_resource_locations(self):
+    def test_bulk_access_resource_locations(self, client):
         query = {"names": [self.resource.name]}
-        response = self.client.post(
+        response = client.post(
             reverse("neurobank:bulk-location-list"), query, format="json"
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        assert response.status_code == status.HTTP_200_OK
         data = [json.loads(record) for record in response]
-        self.assertEqual(len(data), 1)
+        assert len(data) == 1
         res_loc = data[0]
-        self.assertEqual(res_loc["name"], self.resource.name)
-        self.assertEqual(res_loc["filename"], self.resource.filename())
-        self.assertEqual(len(res_loc["locations"]), 1)
-        self.assertEqual(
-            res_loc["locations"][0],
-            res_loc["locations"][0]
-            | {
-                "archive_name": self.archive.name,
-                "resource_name": self.resource.name,
-                "root": self.archive.root,
-                "scheme": self.archive.scheme,
-            },
-        )
+        assert res_loc["name"] == self.resource.name
+        assert res_loc["filename"] == self.resource.filename()
+        assert len(res_loc["locations"]) == 1
+        assert res_loc["locations"][0] == res_loc["locations"][0] | {
+            "archive_name": self.archive.name,
+            "resource_name": self.resource.name,
+            "root": self.archive.root,
+            "scheme": self.archive.scheme,
+        }
 
-    def test_cannot_bulk_access_resource_locations_with_empty_list(self):
+    def test_cannot_bulk_access_resource_locations_with_empty_list(self, client):
         query = {"names": []}
-        response = self.client.post(
+        response = client.post(
             reverse("neurobank:bulk-location-list"), query, format="json"
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_bulk_access_resource_locations_with_bad_request(self):
+    def test_bulk_access_resource_locations_with_bad_request(self, client):
         query = {"something_wrong": [self.resource.name]}
-        response = self.client.post(
+        response = client.post(
             reverse("neurobank:bulk-location-list"), query, format="json"
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_cannot_anonymously_delete_resource(self):
-        response = self.client.delete(
+    def test_cannot_anonymously_delete_resource(self, client):
+        response = client.delete(
             reverse("neurobank:resource", args=[self.resource])
         )
-        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        assert response.status_code == status.HTTP_403_FORBIDDEN
 
-    def test_can_delete_resource(self):
-        self.login()
-        response = self.client.delete(
+    def test_can_delete_resource(self, auth_client):
+        response = auth_client.delete(
             reverse("neurobank:resource", args=[self.resource])
         )
-        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
-        response2 = self.client.get(
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+        response2 = auth_client.get(
             reverse("neurobank:resource", args=[self.resource.name])
         )
-        self.assertEqual(response2.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertTrue(self.location not in Location.objects.all())
+        assert response2.status_code == status.HTTP_404_NOT_FOUND
+        assert self.location not in Location.objects.all()
 
-    def test_cannot_modify_name(self):
-        self.login()
-        response = self.client.patch(
+    def test_cannot_modify_name(self, auth_client):
+        response = auth_client.patch(
             reverse("neurobank:resource", args=[self.resource]),
             {"name": str(uuid.uuid4())},
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_superuser_can_modify_sha1(self):
+    def test_superuser_can_modify_sha1(self, auth_client):
         my_sha = hashlib.sha1(b"blah").hexdigest()
-        self.login()
-        response = self.client.patch(
+        response = auth_client.patch(
             reverse("neurobank:resource", args=[self.resource]),
             {"sha1": my_sha},
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["sha1"], my_sha)
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["sha1"] == my_sha
 
-    def test_nonsuperuser_cannot_modify_sha1(self):
-        user = User.objects.create_user(
+    def test_nonsuperuser_cannot_modify_sha1(self, client, user_password):
+        normal_user = User.objects.create_user(
             username="normal_user",
-            password=self.password,
+            password=user_password,
             email="normal-user@domain.com",
         )
-        user.user_permissions.add(Permission.objects.get(codename="change_resource"))
-        self.client.login(username="normal_user", password=self.password)
-        response = self.client.patch(
+        normal_user.user_permissions.add(
+            Permission.objects.get(codename="change_resource")
+        )
+        client.login(username="normal_user", password=user_password)
+        response = client.patch(
             reverse("neurobank:resource", args=[self.resource]),
             {"sha1": hashlib.sha1(b"blah").hexdigest()},
         )
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_can_update_metadata(self):
-        self.login()
-        response = self.client.patch(
+    def test_can_update_metadata(self, auth_client):
+        response = auth_client.patch(
             reverse("neurobank:resource", args=[self.resource]),
             {"metadata": {"test_field": "value"}},
             format="json",
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(
-            response.data["metadata"],
-            response.data["metadata"] | {"test_field": "value"},
+        assert response.status_code == status.HTTP_200_OK
+        assert (
+            response.data["metadata"]
+            == response.data["metadata"] | {"test_field": "value"}
         )
 
-    @unittest.skip("not implemented")
-    def test_can_dry_run_create_resource(self):
-        self.login()
-        response = self.client.post(
+    @pytest.mark.skip(reason="not implemented")
+    def test_can_dry_run_create_resource(self, auth_client):
+        response = auth_client.post(
             reverse("neurobank:resource-test-create"),
             {
                 "dtype": self.dtype.name,
             },
         )
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        response2 = self.client.get(
+        assert response.status_code == status.HTTP_201_CREATED
+        response2 = auth_client.get(
             reverse("neurobank:resource", args=[response.data["name"]])
         )
-        self.assertEqual(response2.status_code, status.HTTP_404_NOT_FOUND)
+        assert response2.status_code == status.HTTP_404_NOT_FOUND
 
 
-class LocationTests(APIAuthTestCase):
-    def setUp(self):
-        super(LocationTests, self).setUp()
+class TestLocation:
+    @pytest.fixture(autouse=True)
+    def setup(self, user):
+        self.user = user
         self.dtype = DataType.objects.create(
             name="spike_times",
             content_type="application/vnd.meliza-org.pproc+json; version=1.0",
@@ -392,14 +350,14 @@ class LocationTests(APIAuthTestCase):
             resource=self.resource, archive=self.archive
         )
 
-    def test_location_list(self):
-        response = self.client.get(
+    def test_location_list(self, client):
+        response = client.get(
             reverse("neurobank:location-list", args=[self.resource])
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
 
-    def test_location_list_sorted_by_accessbility(self):
+    def test_location_list_sorted_by_accessbility(self, client):
         offline_archive = Archive.objects.create(
             name="tape",
             scheme="tape",
@@ -413,252 +371,234 @@ class LocationTests(APIAuthTestCase):
             created_by=self.user,
             metadata={"experimenter": "dmeliza"},
         )
-        _location_1 = Location.objects.create(
+        Location.objects.create(
             resource=resource,
             archive=offline_archive,
         )
-        _location_2 = Location.objects.create(
+        Location.objects.create(
             resource=resource,
             archive=self.archive,
         )
-        response = self.client.get(reverse("neurobank:location-list", args=[resource]))
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 2)
-        self.assertEqual(response.data[0]["archive_name"], self.archive.name)
-        self.assertEqual(response.data[1]["archive_name"], offline_archive.name)
+        response = client.get(reverse("neurobank:location-list", args=[resource]))
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 2
+        assert response.data[0]["archive_name"] == self.archive.name
+        assert response.data[1]["archive_name"] == offline_archive.name
 
-    def test_location_list_404_invalid_resource(self):
-        response = self.client.get(reverse("neurobank:location-list", args=["adsadf"]))
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+    def test_location_list_404_invalid_resource(self, client):
+        response = client.get(reverse("neurobank:location-list", args=["adsadf"]))
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_location_404_invalid_archive(self):
+    def test_location_404_invalid_archive(self, client):
         dummy_location = "adsfadf"
-        response = self.client.get(
+        response = client.get(
             reverse("neurobank:location", args=[self.resource, dummy_location])
         )
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_location_detail(self):
-        response = self.client.get(
+    def test_location_detail(self, client):
+        response = client.get(
             reverse("neurobank:location", args=[self.resource, self.archive])
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        assert response.status_code == status.HTTP_200_OK
         ret = response.data
-        self.assertDictEqual(
-            ret,
-            ret
-            | {
-                "archive_name": self.archive.name,
-                "resource_name": self.resource.name,
-                "scheme": self.archive.scheme,
-            },
-        )
+        assert ret == ret | {
+            "archive_name": self.archive.name,
+            "resource_name": self.resource.name,
+            "scheme": self.archive.scheme,
+        }
 
-    def test_cannot_add_duplicate_location(self):
-        self.login()
-        response = self.client.post(
+    def test_cannot_add_duplicate_location(self, auth_client):
+        response = auth_client.post(
             reverse("neurobank:location-list", args=[self.resource]),
             {"archive_name": self.archive.name},
         )
-        self.assertEqual(
-            response.status_code,
-            status.HTTP_400_BAD_REQUEST,
-            "should not be able to add duplicate archive to resource locations",
+        assert response.status_code == status.HTTP_400_BAD_REQUEST, (
+            "should not be able to add duplicate archive to resource locations"
         )
 
-    def test_can_delete_location(self):
-        self.login()
-        response = self.client.delete(
+    def test_can_delete_location(self, auth_client):
+        response = auth_client.delete(
             reverse("neurobank:location", args=[self.resource.name, self.archive])
         )
-        self.assertEqual(
-            response.status_code,
-            status.HTTP_204_NO_CONTENT,
-            "unable to delete a location",
+        assert response.status_code == status.HTTP_204_NO_CONTENT, (
+            "unable to delete a location"
         )
 
-        response = self.client.get(
+        response = auth_client.get(
             reverse("neurobank:location-list", args=[self.resource])
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data, [])
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data == []
 
-    def test_can_add_location(self):
+    def test_can_add_location(self, auth_client):
         new_archive = Archive.objects.create(
             name="secret", scheme="neurobank", root="/home/data/secret"
         )
-        self.login()
-        response = self.client.post(
+        response = auth_client.post(
             reverse("neurobank:location-list", args=[self.resource]),
             {"archive_name": new_archive.name},
             format="json",
         )
-        self.assertEqual(
-            response.status_code,
-            status.HTTP_201_CREATED,
-            "unable to add location to resource",
+        assert response.status_code == status.HTTP_201_CREATED, (
+            "unable to add location to resource"
         )
-        self.assertEqual(self.resource.locations.count(), 2)
+        assert self.resource.locations.count() == 2
 
 
-class DataTypeTests(APIAuthTestCase):
-    def setUp(self):
-        super(DataTypeTests, self).setUp()
+class TestDataType:
+    @pytest.fixture(autouse=True)
+    def setup(self, user):
+        self.user = user
         self.dtype = DataType.objects.create(
             name="spike_times",
             content_type="application/vnd.meliza-org.pproc+json; version=1.0",
             extension="pprox",
         )
 
-    def test_can_access_datatype_list(self):
-        response = self.client.get(reverse("neurobank:datatype-list"))
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+    def test_can_access_datatype_list(self, client):
+        response = client.get(reverse("neurobank:datatype-list"))
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_can_access_datatype_detail(self):
-        response = self.client.get(reverse("neurobank:datatype", args=[self.dtype]))
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(
-            response.data,
-            {
-                "name": self.dtype.name,
-                "content_type": self.dtype.content_type,
-                "extension": "pprox",
-            },
-        )
+    def test_can_access_datatype_detail(self, client):
+        response = client.get(reverse("neurobank:datatype", args=[self.dtype]))
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data == {
+            "name": self.dtype.name,
+            "content_type": self.dtype.content_type,
+            "extension": "pprox",
+        }
 
-    def test_cannot_access_nonexistent_datatype_detail(self):
-        response = self.client.get(reverse("neurobank:datatype", args=["blarg"]))
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+    def test_cannot_access_nonexistent_datatype_detail(self, client):
+        response = client.get(reverse("neurobank:datatype", args=["blarg"]))
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_can_create_datatype(self):
-        self.login()
+    def test_can_create_datatype(self, auth_client):
         data = {
             "name": "acoustic_waveform",
             "content_type": "audio/wav",
             "extension": "wav",
         }
-        response = self.client.post(reverse("neurobank:datatype-list"), data)
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data, data)
+        response = auth_client.post(reverse("neurobank:datatype-list"), data)
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data == data
 
-        response2 = self.client.get(reverse("neurobank:datatype", args=[data["name"]]))
-        self.assertEqual(response2.status_code, status.HTTP_200_OK)
-        self.assertEqual(response2.data, data)
+        response2 = auth_client.get(
+            reverse("neurobank:datatype", args=[data["name"]])
+        )
+        assert response2.status_code == status.HTTP_200_OK
+        assert response2.data == data
 
-    def test_datatype_name_length_error(self):
-        self.login()
+    def test_datatype_name_length_error(self, auth_client):
         data = {
             "name": "an_extremely_long_and_illegal_name_for_a_datatype_that_is_way_more_than_32_characters",
             "content_type": "audio/wav",
             "extension": "wav",
         }
-        response = self.client.post(reverse("neurobank:datatype-list"), data)
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        response = auth_client.post(reverse("neurobank:datatype-list"), data)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_cannot_create_duplicate_datatype(self):
-        self.login()
+    def test_cannot_create_duplicate_datatype(self, auth_client):
         data = {
             "name": self.dtype.name,
             "content_type": self.dtype.content_type,
             "extension": "pprox",
         }
-        response = self.client.post(reverse("neurobank:datatype-list"), data)
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        response = auth_client.post(reverse("neurobank:datatype-list"), data)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_cannot_delete_datatype(self):
-        self.login()
-        response = self.client.delete(reverse("neurobank:datatype", args=[self.dtype]))
-        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+    def test_cannot_delete_datatype(self, auth_client):
+        response = auth_client.delete(
+            reverse("neurobank:datatype", args=[self.dtype])
+        )
+        assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
 
-    def test_cannot_modify_datatype(self):
-        self.login()
-        response = self.client.patch(
+    def test_cannot_modify_datatype(self, auth_client):
+        response = auth_client.patch(
             reverse("neurobank:datatype", args=[self.dtype]), {"name": "blahblahblah"}
         )
-        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
 
 
-class ArchiveTests(APIAuthTestCase):
-    def setUp(self):
-        super(ArchiveTests, self).setUp()
+class TestArchive:
+    @pytest.fixture(autouse=True)
+    def setup(self, user):
+        self.user = user
         self.archive = Archive.objects.create(
             name="local", scheme="neurobank", root="/home/data/intracellular"
         )
 
-    def test_can_access_archive_list(self):
-        response = self.client.get(reverse("neurobank:archive-list"))
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+    def test_can_access_archive_list(self, client):
+        response = client.get(reverse("neurobank:archive-list"))
+        assert response.status_code == status.HTTP_200_OK
 
-    def test_can_access_archive_detail(self):
-        response = self.client.get(reverse("neurobank:archive", args=[self.archive]))
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(
-            response.data,
-            {
-                "name": self.archive.name,
-                "scheme": self.archive.scheme,
-                "root": self.archive.root,
-                "accessibility": "local",  # default
-            },
-        )
+    def test_can_access_archive_detail(self, client):
+        response = client.get(reverse("neurobank:archive", args=[self.archive]))
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data == {
+            "name": self.archive.name,
+            "scheme": self.archive.scheme,
+            "root": self.archive.root,
+            "accessibility": "local",  # default
+        }
 
-    def test_cannot_access_nonexistent_archive_detail(self):
-        response = self.client.get(reverse("neurobank:archive", args=["blarg"]))
-        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+    def test_cannot_access_nonexistent_archive_detail(self, client):
+        response = client.get(reverse("neurobank:archive", args=["blarg"]))
+        assert response.status_code == status.HTTP_404_NOT_FOUND
 
-    def test_can_create_archive(self):
-        self.login()
+    def test_can_create_archive(self, auth_client):
         data = {
             "name": "remote",
             "scheme": "http",
             "root": "/meliza.org/spike_times/",
             "accessibility": "remote",
         }
-        response = self.client.post(reverse("neurobank:archive-list"), data)
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(response.data, data)
+        response = auth_client.post(reverse("neurobank:archive-list"), data)
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data == data
 
-        response2 = self.client.get(reverse("neurobank:archive", args=[data["name"]]))
-        self.assertEqual(response2.status_code, status.HTTP_200_OK)
-        self.assertEqual(response2.data, data)
+        response2 = auth_client.get(
+            reverse("neurobank:archive", args=[data["name"]])
+        )
+        assert response2.status_code == status.HTTP_200_OK
+        assert response2.data == data
 
-    def test_cannot_create_duplicate_archive(self):
-        self.login()
+    def test_cannot_create_duplicate_archive(self, auth_client):
         data = {
             "name": self.archive.name,
             "scheme": "http",
             "root": "/meliza.org/spike_times/",
         }
-        response = self.client.post(reverse("neurobank:archive-list"), data)
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        response = auth_client.post(reverse("neurobank:archive-list"), data)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_cannot_create_badly_named_archive(self):
-        self.login()
+    def test_cannot_create_badly_named_archive(self, auth_client):
         data = {
             "name": "blargh!!@!#",
             "scheme": "http",
             "root": "/meliza.org/spike_times/",
         }
-        response = self.client.post(reverse("neurobank:archive-list"), data)
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        response = auth_client.post(reverse("neurobank:archive-list"), data)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-        
-    def test_cannot_delete_archive(self):
-        self.login()
-        response = self.client.delete(reverse("neurobank:archive", args=[self.archive]))
-        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
-
-    def test_can_modify_archive(self):
-        self.login()
-        response = self.client.patch(
-            reverse("neurobank:archive", args=[self.archive]), {"name": "local_intrac"}
+    def test_cannot_delete_archive(self, auth_client):
+        response = auth_client.delete(
+            reverse("neurobank:archive", args=[self.archive])
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+
+    def test_can_modify_archive(self, auth_client):
+        response = auth_client.patch(
+            reverse("neurobank:archive", args=[self.archive]),
+            {"name": "local_intrac"},
+        )
+        assert response.status_code == status.HTTP_200_OK
 
 
-class ArchiveFilterTests(APIAuthTestCase):
-    def setUp(self):
-        super(ArchiveFilterTests, self).setUp()
+class TestArchiveFilter:
+    @pytest.fixture(autouse=True)
+    def setup(self, user):
+        self.user = user
         self.archive_1 = Archive.objects.create(
             name="intracellular", scheme="neurobank", root="/home/data/intracellular"
         )
@@ -666,22 +606,23 @@ class ArchiveFilterTests(APIAuthTestCase):
             name="extracellular", scheme="http", root="/meliza.org/data/extracellular"
         )
 
-    def test_can_filter_by_scheme(self):
+    def test_can_filter_by_scheme(self, client):
         url = reverse("neurobank:archive-list")
-        response = self.client.get(url, {"scheme": self.archive_1.scheme})
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
+        response = client.get(url, {"scheme": self.archive_1.scheme})
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
 
-    def test_can_filter_by_root(self):
+    def test_can_filter_by_root(self, client):
         url = reverse("neurobank:archive-list")
-        response = self.client.get(url, {"root": self.archive_1.root})
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
+        response = client.get(url, {"root": self.archive_1.root})
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
 
 
-class ResourceFilterTests(APIAuthTestCase):
-    def setUp(self):
-        super(ResourceFilterTests, self).setUp()
+class TestResourceFilter:
+    @pytest.fixture(autouse=True)
+    def setup(self, user):
+        self.user = user
         self.dtype1 = DataType.objects.create(
             name="spike_times",
             content_type="application/vnd.meliza-org.pproc+json; version=1.0",
@@ -715,106 +656,125 @@ class ResourceFilterTests(APIAuthTestCase):
         )
         Location.objects.create(resource=self.resource2, archive=self.archive_local)
 
-    def test_can_filter_by_name(self):
-        response = self.client.get(
+    def test_can_filter_by_name(self, client):
+        response = client.get(
             reverse("neurobank:resource-list"), {"name": str(self.resource1)[:6]}
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["name"], str(self.resource1))
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]["name"] == str(self.resource1)
 
-    def test_can_filter_by_sha1(self):
-        response = self.client.get(
-            reverse("neurobank:resource-list"), {"sha1": str(self.resource1.sha1)[:6]}
+    def test_can_filter_by_sha1(self, client):
+        response = client.get(
+            reverse("neurobank:resource-list"),
+            {"sha1": str(self.resource1.sha1)[:6]},
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["name"], str(self.resource1))
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]["name"] == str(self.resource1)
 
-    def test_can_filter_by_dtype(self):
-        response = self.client.get(
+    def test_can_filter_by_dtype(self, client):
+        response = client.get(
             reverse("neurobank:resource-list"), {"dtype": self.dtype1.name}
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["name"], str(self.resource1))
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]["name"] == str(self.resource1)
 
-    def test_can_filter_by_user(self):
-        response = self.client.get(
+    def test_can_filter_by_user(self, client):
+        response = client.get(
             reverse("neurobank:resource-list"), {"created_by": self.user.username}
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 2)
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 2
 
-    def test_can_filter_by_location(self):
-        response = self.client.get(
-            reverse("neurobank:resource-list"), {"location": self.archive_local.name}
+    def test_can_filter_by_location(self, client):
+        response = client.get(
+            reverse("neurobank:resource-list"),
+            {"location": self.archive_local.name},
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 2)
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 2
 
-    def test_can_filter_by_scheme(self):
-        response = self.client.get(
-            reverse("neurobank:resource-list"), {"scheme": self.archive_remote.scheme}
+    def test_can_filter_by_scheme(self, client):
+        response = client.get(
+            reverse("neurobank:resource-list"),
+            {"scheme": self.archive_remote.scheme},
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
 
-    def test_can_filter_by_metadata(self):
-        response = self.client.get(
+    def test_can_filter_by_metadata(self, client):
+        response = client.get(
             reverse("neurobank:resource-list"), {"metadata__experimenter": "mcb2x"}
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["name"], str(self.resource2))
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]["name"] == str(self.resource2)
 
-    def test_can_exclude_by_metadata(self):
-        response = self.client.get(
-            reverse("neurobank:resource-list"), {"metadata__experimenter__neq": "mcb2x"}
+    def test_can_exclude_by_metadata(self, client):
+        response = client.get(
+            reverse("neurobank:resource-list"),
+            {"metadata__experimenter__neq": "mcb2x"},
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["name"], str(self.resource1))
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]["name"] == str(self.resource1)
 
-    def test_can_filter_by_numeric_value(self):
-        response = self.client.get(
+    def test_can_filter_by_numeric_value(self, client):
+        response = client.get(
             reverse("neurobank:resource-list"), {"metadata__int_val": 5}
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["name"], str(self.resource1))
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]["name"] == str(self.resource1)
 
-    def test_can_filter_int_by_nonequality(self):
-        response = self.client.get(
+    def test_can_filter_int_by_nonequality(self, client):
+        response = client.get(
             reverse("neurobank:resource-list"), {"metadata__int_val__gt": 5}
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["name"], str(self.resource2))
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]["name"] == str(self.resource2)
 
-    def test_can_filter_float_by_nonequality(self):
-        response = self.client.get(
+    def test_can_filter_float_by_nonequality(self, client):
+        response = client.get(
             reverse("neurobank:resource-list"), {"metadata__float_val__lte": 0}
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["name"], str(self.resource2))
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]["name"] == str(self.resource2)
 
-    def test_can_filter_string_encoded_numeric_value(self):
-        response = self.client.get(
+    def test_can_filter_string_encoded_numeric_value(self, client):
+        response = client.get(
             reverse("neurobank:resource-list"), {"metadata__strint_val": r'"10"'}
         )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["name"], str(self.resource1))
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]["name"] == str(self.resource1)
 
 
-@override_settings(
-    SENDFILE_BACKEND="django_sendfile.backends.nginx",
-    SENDFILE_ROOT="/",
-    SENDFILE_URL="/",
-)
-class DownloadTests(APIAuthTestCase):
+class TestDownload:
+    @pytest.fixture(autouse=True)
+    def _sendfile_settings(self, settings):
+        settings.SENDFILE_BACKEND = "django_sendfile.backends.nginx"
+        settings.SENDFILE_ROOT = "/"
+        settings.SENDFILE_URL = "/"
+
+    @pytest.fixture(autouse=True)
+    def setup(self, user, tmp_path):
+        self.user = user
+        self.directory = tmp_path
+        self.dtype = DataType.objects.create(
+            name="spike_times",
+            content_type="application/vnd.meliza-org.pprox+json; version=1.0",
+            downloadable=True,
+        )
+        self.archive = Archive.objects.create(
+            name="local", scheme="neurobank", root=str(self.directory)
+        )
+        self.resource, self.fs_path = self._create_file()
+
     def _create_file(
         self,
         content=b"",
@@ -835,104 +795,80 @@ class DownloadTests(APIAuthTestCase):
             metadata={"experimenter": "dmeliza"},
         )
         Location.objects.create(resource=resource, archive=archive)
-        fs_path = ppath.join(
-            self.directory.name, "resources", resource.name[0:2], resource.name + ".bin"
+        fs_path = self.directory / "resources" / resource.name[0:2] / (
+            resource.name + ".bin"
         )
         if not skip_file_creation:
-            os.makedirs(os.path.dirname(fs_path), exist_ok=True)
-            with open(fs_path, "wb") as f:
-                f.write(file.read())
-        return resource, fs_path
+            fs_path.parent.mkdir(parents=True, exist_ok=True)
+            fs_path.write_bytes(file.read())
+        return resource, str(fs_path)
 
-    def setUp(self):
-        super(DownloadTests, self).setUp()
-        self.directory = tempfile.TemporaryDirectory()
-        self.dtype = DataType.objects.create(
-            name="spike_times",
-            content_type="application/vnd.meliza-org.pprox+json; version=1.0",
-            downloadable=True,
-        )
-        self.archive = Archive.objects.create(
-            name="local", scheme="neurobank", root=self.directory.name
-        )
-        self.resource, self.fs_path = self._create_file()
-
-    def tearDown(self):
-        super(DownloadTests, self).tearDown()
-        self.directory.cleanup()
-
-    def test_locations_include_remote(self):
+    def test_locations_include_remote(self, client):
         url = reverse("neurobank:location-list", args=[self.resource])
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        self.assertSetEqual(
-            {self.archive.name, DOWNLOAD_ARCHIVE_NAME},
-            {loc["archive_name"] for loc in response.data},
-        )
+        response = client.get(url)
+        assert response.status_code == 200
+        assert {self.archive.name, DOWNLOAD_ARCHIVE_NAME} == {
+            loc["archive_name"] for loc in response.data
+        }
 
-    def test_bulk_locations_include_remote(self):
+    def test_bulk_locations_include_remote(self, client):
         query = {"names": [self.resource.name]}
         url = reverse("neurobank:bulk-location-list")
-        response = self.client.post(url, query, format="json")
-        self.assertEqual(response.status_code, 200)
+        response = client.post(url, query, format="json")
+        assert response.status_code == 200
         data = [json.loads(record) for record in response]
-        self.assertEqual(len(data), 1)
+        assert len(data) == 1
         res_loc = data[0]["locations"]
-        self.assertSetEqual(
-            {self.archive.name, DOWNLOAD_ARCHIVE_NAME},
-            {loc["archive_name"] for loc in res_loc},
-        )
+        assert {self.archive.name, DOWNLOAD_ARCHIVE_NAME} == {
+            loc["archive_name"] for loc in res_loc
+        }
 
-    def test_bulk_locations_multiple_resources(self):
-        resource, path = self._create_file(content=b"something different")
+    def test_bulk_locations_multiple_resources(self, client):
+        resource, _path = self._create_file(content=b"something different")
         query = {"names": [self.resource.name, resource.name]}
         url = reverse("neurobank:bulk-location-list")
-        response = self.client.post(url, query, format="json")
-        self.assertEqual(response.status_code, 200)
+        response = client.post(url, query, format="json")
+        assert response.status_code == 200
         data = [json.loads(record) for record in response]
-        self.assertEqual(len(data), 2)
+        assert len(data) == 2
 
-    def test_bulk_locations_filter_by_archive(self):
+    def test_bulk_locations_filter_by_archive(self, client):
         archive = Archive.objects.create(
             name="other-local", scheme="neurobank", root=""
         )
-        resource, path = self._create_file(
+        resource, _path = self._create_file(
             content=b"something different", skip_file_creation=True, archive=archive
         )
-        query = {"names": [self.resource.name, resource.name], "archive": archive.name}
+        query = {
+            "names": [self.resource.name, resource.name],
+            "archive": archive.name,
+        }
         url = reverse("neurobank:bulk-location-list")
-        response = self.client.post(url, query, format="json")
-        self.assertEqual(response.status_code, 200)
+        response = client.post(url, query, format="json")
+        assert response.status_code == 200
         data = [json.loads(record) for record in response]
-        self.assertEqual(len(data), 1)
+        assert len(data) == 1
         res_loc = data[0]["locations"]
-        self.assertSetEqual(
-            {archive.name},
-            {loc["archive_name"] for loc in res_loc},
-            "bulk locations should omit registry when filtering by archive name or scheme",
+        assert {archive.name} == {loc["archive_name"] for loc in res_loc}, (
+            "bulk locations should omit registry when filtering by archive name or scheme"
         )
 
-    def test_nginx_header(self):
+    def test_nginx_header(self, client):
         url = reverse("neurobank:resource-download", args=[self.resource])
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        self.assertTrue(
-            ppath.samefile(
-                response["X-Accel-Redirect"],
-                self.fs_path,
-            )
-        )
+        response = client.get(url)
+        assert response.status_code == 200
+        assert ppath.samefile(response["X-Accel-Redirect"], self.fs_path)
 
-    def test_missing_file(self):
+    def test_missing_file(self, client):
         missing_resource, _ = self._create_file(b"missing", skip_file_creation=True)
         url = reverse("neurobank:resource-download", args=[missing_resource])
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 415)
+        response = client.get(url)
+        assert response.status_code == 415
         url = reverse("neurobank:resource", args=[missing_resource])
-        response = self.client.get(url)
-        self.assertNotIn("download_url", response.data)
+        response = client.get(url)
+        assert "download_url" not in response.data
 
-    def test_non_downloadable_dtype(self):
+    def test_non_downloadable_dtype(self, client):
         non_downloadable_dtype = DataType.objects.create(
             name="folder",
         )
@@ -940,31 +876,33 @@ class DownloadTests(APIAuthTestCase):
             b"non-donwloadable", dtype=non_downloadable_dtype
         )
 
-        url = reverse("neurobank:resource-download", args=[non_downloadable_resource])
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 415)
+        url = reverse(
+            "neurobank:resource-download", args=[non_downloadable_resource]
+        )
+        response = client.get(url)
+        assert response.status_code == 415
         url = reverse("neurobank:resource", args=[non_downloadable_resource])
-        response = self.client.get(url)
-        self.assertNotIn("download_url", response.data)
+        response = client.get(url)
+        assert "download_url" not in response.data
 
-    def test_folder_instead_of_file(self):
+    def test_folder_instead_of_file(self, client):
         missing_resource, path = self._create_file(b"missing", skip_file_creation=True)
         os.makedirs(path)
         url = reverse("neurobank:resource-download", args=[missing_resource])
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 415)
+        response = client.get(url)
+        assert response.status_code == 415
         url = reverse("neurobank:resource", args=[missing_resource])
-        response = self.client.get(url)
-        self.assertNotIn("download_url", response.data)
+        response = client.get(url)
+        assert "download_url" not in response.data
 
-    def test_non_neurobank_archive_scheme(self):
+    def test_non_neurobank_archive_scheme(self, client):
         archive = Archive.objects.create(
-            name="ipfs", scheme="ipfs", root=self.directory.name
+            name="ipfs", scheme="ipfs", root=str(self.directory)
         )
         resource, _ = self._create_file(b"bad archive", archive=archive)
         url = reverse("neurobank:resource-download", args=[resource])
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 415)
+        response = client.get(url)
+        assert response.status_code == 415
         url = reverse("neurobank:resource", args=[resource])
-        response = self.client.get(url)
-        self.assertNotIn("download_url", response.data)
+        response = client.get(url)
+        assert "download_url" not in response.data
