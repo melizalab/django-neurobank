@@ -246,10 +246,11 @@ class LocationList(generics.ListAPIView):
         return Response(serializer.data)
 
     def post(self, request, *args, **kwargs):
-        data = {
-            "archive_name": request.data["archive_name"],
-            "resource_name": kwargs["resource_name"],
-        }
+        data = {"resource_name": kwargs["resource_name"]}
+        if "archive_name" in request.data:
+            data["archive_name"] = request.data["archive_name"]
+        if "key" in request.data:
+            data["key"] = request.data["key"]
         serializer = serializers.LocationSerializer(data=data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -272,6 +273,24 @@ class LocationDetail(generics.RetrieveDestroyAPIView):
             resource__name=self.kwargs["resource_name"],
             archive__name=self.kwargs["archive_pk"],
         )
+
+    def patch(self, request, *args, **kwargs):
+        if set(request.data) - {"key"}:
+            return Response(
+                {"detail": "only the key of a location can be changed"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        location = self.get_object()
+        serializer = serializers.LocationSerializer(
+            location, data=request.data, partial=True
+        )
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            serializer.save()
+        except IntegrityError as err:
+            return Response({"detail": str(err)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.data)
 
 
 def check_bulk_args(request):

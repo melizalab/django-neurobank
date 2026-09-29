@@ -178,10 +178,30 @@ class LocationSerializer(serializers.ModelSerializer):
     )
     scheme = serializers.ReadOnlyField(source="archive.scheme")
     root = serializers.ReadOnlyField(source="archive.root")
+    key = serializers.CharField(
+        required=False, allow_null=True, allow_blank=True, max_length=1024
+    )
+
+    def validate_key(self, value):
+        """Treat an empty string the same as a missing or null key"""
+        return value or None
+
+    def validate(self, attrs):
+        key = attrs.get("key", getattr(self.instance, "key", None))
+        if key:
+            archive = attrs.get("archive", getattr(self.instance, "archive", None))
+            qs = Location.objects.filter(archive=archive, key=key)
+            if self.instance is not None:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError(
+                    {"key": "another resource in this archive already has this key"}
+                )
+        return attrs
 
     class Meta:
         model = Location
-        fields = ("archive_name", "scheme", "root", "resource_name")
+        fields = ("archive_name", "scheme", "root", "resource_name", "key")
         validators = [
             UniqueTogetherValidator(
                 queryset=Location.objects.all(),

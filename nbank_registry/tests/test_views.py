@@ -460,6 +460,187 @@ class TestLocation:
         ), "unable to add location to resource"
         assert self.resource.locations.count() == 2
 
+    def test_post_location_without_archive_name_is_bad_request(self, auth_client):
+        response = auth_client.post(
+            reverse("neurobank:location-list", args=[self.resource]),
+            {},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["archive_name"] == ["This field is required."]
+
+    def test_location_key_defaults_to_null(self, client):
+        response = client.get(
+            reverse("neurobank:location", args=[self.resource, self.archive])
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["key"] is None
+
+    def test_can_add_location_with_key(self, auth_client):
+        new_archive = Archive.objects.create(
+            name="dataverse", scheme="dataverse", root="dataverse.example.edu/doi:1"
+        )
+        response = auth_client.post(
+            reverse("neurobank:location-list", args=[self.resource]),
+            {"archive_name": new_archive.name, "key": "123456"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["key"] == "123456"
+
+        list_response = auth_client.get(
+            reverse("neurobank:location-list", args=[self.resource])
+        )
+        by_archive = {loc["archive_name"]: loc for loc in list_response.data}
+        assert by_archive[new_archive.name]["key"] == "123456"
+
+        detail_response = auth_client.get(
+            reverse("neurobank:location", args=[self.resource, new_archive])
+        )
+        assert detail_response.data["key"] == "123456"
+
+        bulk_response = auth_client.post(
+            reverse("neurobank:bulk-location-list"),
+            {"names": [self.resource.name]},
+            format="json",
+        )
+        data = [json.loads(record) for record in bulk_response]
+        bulk_by_archive = {loc["archive_name"]: loc for loc in data[0]["locations"]}
+        assert bulk_by_archive[new_archive.name]["key"] == "123456"
+
+    def test_can_add_location_with_empty_string_key_stores_null(self, auth_client):
+        new_archive = Archive.objects.create(
+            name="secret", scheme="neurobank", root="/home/data/secret"
+        )
+        response = auth_client.post(
+            reverse("neurobank:location-list", args=[self.resource]),
+            {"archive_name": new_archive.name, "key": ""},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["key"] is None
+
+    def test_can_add_location_with_numeric_key_stores_as_string(self, auth_client):
+        new_archive = Archive.objects.create(
+            name="dataverse", scheme="dataverse", root="dataverse.example.edu/doi:1"
+        )
+        response = auth_client.post(
+            reverse("neurobank:location-list", args=[self.resource]),
+            {"archive_name": new_archive.name, "key": 123456},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["key"] == "123456"
+
+    def test_cannot_add_location_with_too_long_key(self, auth_client):
+        new_archive = Archive.objects.create(
+            name="secret", scheme="neurobank", root="/home/data/secret"
+        )
+        response = auth_client.post(
+            reverse("neurobank:location-list", args=[self.resource]),
+            {"archive_name": new_archive.name, "key": "a" * 1025},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["key"] == [
+            "Ensure this field has no more than 1024 characters."
+        ]
+
+    def test_cannot_add_duplicate_key_in_same_archive(self, auth_client):
+        new_archive = Archive.objects.create(
+            name="dataverse", scheme="dataverse", root="dataverse.example.edu/doi:1"
+        )
+        other_resource = Resource.objects.create(dtype=self.dtype, created_by=self.user)
+        Location.objects.create(
+            resource=other_resource, archive=new_archive, key="123456"
+        )
+        response = auth_client.post(
+            reverse("neurobank:location-list", args=[self.resource]),
+            {"archive_name": new_archive.name, "key": "123456"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data["key"] == [
+            "another resource in this archive already has this key"
+        ]
+
+    def test_can_reuse_key_in_different_archive(self, auth_client):
+        archive_a = Archive.objects.create(
+            name="dataverse-a", scheme="dataverse", root="dataverse.example.edu/a"
+        )
+        archive_b = Archive.objects.create(
+            name="dataverse-b", scheme="dataverse", root="dataverse.example.edu/b"
+        )
+        other_resource = Resource.objects.create(dtype=self.dtype, created_by=self.user)
+        Location.objects.create(resource=other_resource, archive=archive_a, key="123456")
+        response = auth_client.post(
+            reverse("neurobank:location-list", args=[self.resource]),
+            {"archive_name": archive_b.name, "key": "123456"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+
+    def test_can_have_multiple_null_keys_in_same_archive(self):
+        other_resource = Resource.objects.create(dtype=self.dtype, created_by=self.user)
+        Location.objects.create(resource=other_resource, archive=self.archive)
+        # self.location already has a null key in self.archive from setup
+        assert (
+            Location.objects.filter(archive=self.archive, key__isnull=True).count() == 2
+        )
+
+    def test_can_patch_key(self, auth_client):
+        url = reverse("neurobank:location", args=[self.resource, self.archive])
+        response = auth_client.patch(url, {"key": "abc"}, format="json")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["key"] == "abc"
+
+        response = auth_client.patch(url, {"key": "def"}, format="json")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["key"] == "def"
+        get_response = auth_client.get(url)
+        assert get_response.data["key"] == "def"
+
+        response = auth_client.patch(url, {"key": None}, format="json")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["key"] is None
+        get_response = auth_client.get(url)
+        assert get_response.data["key"] is None
+
+    def test_cannot_patch_other_fields(self, auth_client):
+        url = reverse("neurobank:location", args=[self.resource, self.archive])
+        response = auth_client.patch(
+            url, {"archive_name": "somewhere-else"}, format="json"
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response.data == {"detail": "only the key of a location can be changed"}
+        self.location.refresh_from_db()
+        assert self.location.archive == self.archive
+
+    def test_cannot_patch_key_without_authentication(self, client):
+        url = reverse("neurobank:location", args=[self.resource, self.archive])
+        response = client.patch(url, {"key": "abc"}, format="json")
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_cannot_patch_key_without_permission(self, client, user_password):
+        normal_user = User.objects.create_user(
+            username="normal_user",
+            password=user_password,
+            email="normal-user@domain.com",
+        )
+        normal_user.user_permissions.add(Permission.objects.get(codename="add_location"))
+        normal_user.user_permissions.add(
+            Permission.objects.get(codename="delete_location")
+        )
+        client.login(username="normal_user", password=user_password)
+        url = reverse("neurobank:location", args=[self.resource, self.archive])
+        response = client.patch(url, {"key": "abc"}, format="json")
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_patch_nonexistent_location_returns_404(self, auth_client):
+        url = reverse("neurobank:location", args=[self.resource, "no-such-archive"])
+        response = auth_client.patch(url, {"key": "abc"}, format="json")
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
 
 class TestDataType:
     @pytest.fixture(autouse=True)
@@ -828,6 +1009,14 @@ class TestDownload:
             loc["archive_name"] for loc in response.data
         }
 
+    def test_virtual_registry_location_has_null_key(self, client):
+        url = reverse("neurobank:location-list", args=[self.resource])
+        response = client.get(url)
+        registry_loc = next(
+            loc for loc in response.data if loc["archive_name"] == DOWNLOAD_ARCHIVE_NAME
+        )
+        assert registry_loc["key"] is None
+
     def test_bulk_locations_include_remote(self, client):
         query = {"names": [self.resource.name]}
         url = reverse("neurobank:bulk-location-list")
@@ -921,3 +1110,9 @@ class TestDownload:
         url = reverse("neurobank:resource", args=[resource])
         response = client.get(url)
         assert "download_url" not in response.data
+
+
+def test_api_info_reports_version_1_1(client):
+    response = client.get(reverse("neurobank:api-info"))
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["api_version"] == "1.1"

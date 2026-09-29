@@ -9,6 +9,7 @@ from nbank_registry.models import Archive, DataType, Location, Resource
 
 class LocationInline(admin.TabularInline):
     model = Location
+    fields = ("archive", "key")
 
 
 class DataTypeAdmin(admin.ModelAdmin):

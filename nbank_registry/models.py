@@ -93,6 +93,13 @@ class Location(models.Model):
     id = models.AutoField(primary_key=True)
     resource = models.ForeignKey("Resource", on_delete=models.CASCADE)
     archive = models.ForeignKey("Archive", on_delete=models.CASCADE)
+    key = models.CharField(
+        max_length=1024,
+        blank=True,
+        null=True,
+        help_text="address of the resource within the archive, if it can't be "
+        "derived from the resource name",
+    )
 
     def __str__(self):
         return ":".join((self.archive.name, str(self.resource)))
@@ -100,3 +107,10 @@ class Location(models.Model):
     class Meta:
         unique_together = ("resource", "archive")
         ordering = ["-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["archive", "key"],
+                condition=models.Q(key__isnull=False),
+                name="location_unique_key_per_archive",
+            )
+        ]
