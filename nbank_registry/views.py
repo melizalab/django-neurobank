@@ -147,7 +147,9 @@ class ResourceList(generics.ListCreateAPIView):
 
     """
 
-    queryset = models.Resource.objects.all()
+    queryset = models.Resource.objects.select_related(
+        "dtype", "created_by"
+    ).prefetch_related("locations")
     serializer_class = serializers.ResourceSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = ResourceFilter
@@ -179,7 +181,9 @@ class ResourceList(generics.ListCreateAPIView):
 
 class ResourceDetail(generics.RetrieveUpdateDestroyAPIView):
     lookup_field = "name"
-    queryset = models.Resource.objects.all()
+    queryset = models.Resource.objects.select_related(
+        "dtype", "created_by"
+    ).prefetch_related("locations")
     serializer_class = serializers.ResourceSerializer
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
 

@@ -56,6 +56,23 @@ class TestResource:
         response = client.get(reverse("neurobank:resource-list"))
         assert response.status_code == status.HTTP_200_OK
 
+    def test_resource_list_query_count_is_constant(
+        self, client, django_assert_max_num_queries
+    ):
+        # one query for resources (with dtype/created_by joined), one
+        # prefetch for locations; this should not grow with the number of
+        # resources
+        for i in range(5):
+            resource = Resource.objects.create(
+                sha1=hashlib.sha1(str(i).encode()).hexdigest(),
+                dtype=self.dtype,
+                created_by=self.user,
+            )
+            Location.objects.create(resource=resource, archive=self.archive)
+        with django_assert_max_num_queries(2):
+            response = client.get(reverse("neurobank:resource-list"))
+        assert response.status_code == status.HTTP_200_OK
+
     def test_can_create_resource(self, auth_client):
         response = auth_client.post(
             reverse("neurobank:resource-list"),
@@ -162,6 +179,15 @@ class TestResource:
             "metadata": self.resource.metadata,
             "locations": [self.archive.name],
         }
+
+    def test_resource_detail_query_count_is_constant(
+        self, client, django_assert_max_num_queries
+    ):
+        with django_assert_max_num_queries(2):
+            response = client.get(
+                reverse("neurobank:resource", args=[self.resource.name])
+            )
+        assert response.status_code == status.HTTP_200_OK
 
     def test_cannot_access_nonexistent_resource_detail(self, client):
         response = client.get(reverse("neurobank:resource", args=[uuid.uuid4()]))
