@@ -319,6 +319,24 @@ class TestResource:
         )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
+    def test_creating_resource_lowercases_sha1(self, auth_client):
+        upper_sha1 = hashlib.sha1(b"upper-case-test").hexdigest().upper()
+        response = auth_client.post(
+            reverse("neurobank:resource-list"),
+            {"dtype": self.dtype.name, "sha1": upper_sha1},
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["sha1"] == upper_sha1.lower()
+
+    def test_cannot_create_resource_with_duplicate_sha1_differing_in_case(
+        self, auth_client
+    ):
+        response = auth_client.post(
+            reverse("neurobank:resource-list"),
+            {"dtype": self.dtype.name, "sha1": self.resource.sha1.upper()},
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
     def test_can_update_metadata(self, auth_client):
         response = auth_client.patch(
             reverse("neurobank:resource", args=[self.resource]),
@@ -856,8 +874,40 @@ class TestResourceFilter:
 
     def test_can_filter_by_sha1(self, client):
         response = client.get(
-            reverse("neurobank:resource-list"),
-            {"sha1": str(self.resource1.sha1)[:6]},
+            reverse("neurobank:resource-list"), {"sha1": self.resource1.sha1}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]["name"] == str(self.resource1)
+
+    def test_can_filter_by_sha1_case_insensitively(self, client):
+        response = client.get(
+            reverse("neurobank:resource-list"), {"sha1": self.resource1.sha1.upper()}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]["name"] == str(self.resource1)
+
+    def test_sha1_filter_does_not_match_partial_hash(self, client):
+        response = client.get(
+            reverse("neurobank:resource-list"), {"sha1": self.resource1.sha1[:8]}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 0
+
+    def test_can_filter_by_sha1_contains(self, client):
+        middle = self.resource1.sha1[10:18]
+        response = client.get(
+            reverse("neurobank:resource-list"), {"sha1_contains": middle}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]["name"] == str(self.resource1)
+
+    def test_can_filter_by_sha1_contains_case_insensitively(self, client):
+        middle = self.resource1.sha1[10:18].upper()
+        response = client.get(
+            reverse("neurobank:resource-list"), {"sha1_contains": middle}
         )
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 1
@@ -950,6 +1000,96 @@ class TestResourceFilter:
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 1
         assert response.data[0]["name"] == str(self.resource1)
+
+
+class TestResourceFilterDistinct:
+    """Filters that join across locations should not return duplicate resources"""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, user):
+        self.user = user
+        self.dtype = DataType.objects.create(
+            name="spike_times",
+            content_type="application/vnd.meliza-org.pprox+json; version=1.0",
+        )
+        # two archives whose names both contain "birds", for testing distinctness
+        # of substring filters, and exactness of the archive filter
+        self.archive_birds = Archive.objects.create(
+            name="birds", scheme="neurobank", root="/home/data/birds"
+        )
+        self.archive_birds_2020 = Archive.objects.create(
+            name="birds-2020", scheme="neurobank", root="/home/data/birds-2020"
+        )
+        self.resource_multi_location = Resource.objects.create(
+            dtype=self.dtype,
+            created_by=self.user,
+            metadata={"test_marker": "multi-location"},
+        )
+        Location.objects.create(
+            resource=self.resource_multi_location, archive=self.archive_birds
+        )
+        Location.objects.create(
+            resource=self.resource_multi_location, archive=self.archive_birds_2020
+        )
+        # a resource with three locations sharing one scheme, for testing
+        # distinctness of the scheme filter
+        self.archive_neurobank_a = Archive.objects.create(
+            name="neurobank-a", scheme="neurobank", root="/home/data/a"
+        )
+        self.archive_neurobank_b = Archive.objects.create(
+            name="neurobank-b", scheme="neurobank", root="/home/data/b"
+        )
+        self.archive_neurobank_c = Archive.objects.create(
+            name="neurobank-c", scheme="neurobank", root="/home/data/c"
+        )
+        self.resource_triple_neurobank = Resource.objects.create(
+            dtype=self.dtype, created_by=self.user
+        )
+        for archive in (
+            self.archive_neurobank_a,
+            self.archive_neurobank_b,
+            self.archive_neurobank_c,
+        ):
+            Location.objects.create(
+                resource=self.resource_triple_neurobank, archive=archive
+            )
+
+    def test_location_filter_returns_resource_once(self, client):
+        # "birds" is a substring of both self.archive_birds and
+        # self.archive_birds_2020, so without .distinct() this would match twice
+        response = client.get(reverse("neurobank:resource-list"), {"location": "birds"})
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]["name"] == str(self.resource_multi_location)
+
+    def test_scheme_filter_returns_resource_once(self, client):
+        response = client.get(
+            reverse("neurobank:resource-list"), {"scheme": "neurobank"}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        names = [r["name"] for r in response.data]
+        assert len(names) == len(set(names))
+        assert names.count(str(self.resource_triple_neurobank)) == 1
+
+    def test_can_filter_by_archive_exact(self, client):
+        response = client.get(reverse("neurobank:resource-list"), {"archive": "birds"})
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]["name"] == str(self.resource_multi_location)
+
+    def test_archive_filter_is_case_sensitive(self, client):
+        response = client.get(reverse("neurobank:resource-list"), {"archive": "Birds"})
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 0
+
+    def test_archive_filter_with_metadata_returns_resource_once(self, client):
+        response = client.get(
+            reverse("neurobank:resource-list"),
+            {"archive": "birds", "metadata__test_marker": "multi-location"},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 1
+        assert response.data[0]["name"] == str(self.resource_multi_location)
 
 
 class TestDownload:

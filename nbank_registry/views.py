@@ -102,18 +102,27 @@ class LocationFilter(filters.FilterSet):
 class ResourceFilter(filters.FilterSet):
     # TODO: consider changing some of these to exact by default
     name = filters.CharFilter(field_name="name", lookup_expr="icontains")
-    sha1 = filters.CharFilter(field_name="sha1", lookup_expr="icontains")
+    sha1 = filters.CharFilter(method="filter_sha1")
+    sha1_contains = filters.CharFilter(field_name="sha1", lookup_expr="icontains")
     dtype = filters.CharFilter(field_name="dtype__name", lookup_expr="icontains")
-    location = filters.CharFilter(field_name="locations__name", lookup_expr="icontains")
+    location = filters.CharFilter(
+        field_name="locations__name", lookup_expr="icontains", distinct=True
+    )
+    archive = filters.CharFilter(
+        field_name="locations__name", lookup_expr="exact", distinct=True
+    )
     has_location = filters.BooleanFilter(
-        field_name="locations", lookup_expr="isnull", exclude=True
+        field_name="locations", lookup_expr="isnull", exclude=True, distinct=True
     )
     created_by = filters.CharFilter(
         field_name="created_by__username", lookup_expr="icontains"
     )
     scheme = filters.CharFilter(
-        field_name="locations__scheme", lookup_expr="istartswith"
+        field_name="locations__scheme", lookup_expr="istartswith", distinct=True
     )
+
+    def filter_sha1(self, queryset, name, value):
+        return queryset.filter(sha1=value.lower())
 
     class Meta:
         model = models.Resource

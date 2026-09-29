@@ -63,6 +63,10 @@ class ResourceSerializer(serializers.ModelSerializer):
 
     def validate_sha1(self, value):
         """If updating, check if user has permission. Check if valid sha1"""
+        if value is not None:
+            if sha1_re.match(value) is None:
+                raise serializers.ValidationError("invalid sha1 value")
+            value = value.lower()
         try:
             is_superuser = self.context["request"].user.is_superuser
         except (AttributeError, KeyError):
@@ -72,8 +76,16 @@ class ResourceSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     "sha1 value cannot be updated; create a new resource"
                 )
-        if value is not None and sha1_re.match(value) is None:
-            raise serializers.ValidationError("invalid sha1 value")
+        if value is not None:
+            # done here, after lowercasing, rather than through the default
+            # UniqueValidator, which would compare the value as submitted
+            qs = Resource.objects.filter(sha1=value)
+            if self.instance is not None:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError(
+                    "a resource with this sha1 already exists"
+                )
         return value
 
     def validate_name(self, value):
@@ -129,7 +141,9 @@ class ResourceSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "name": unique_name_kwargs(
                 Resource, "a resource with this name already exists"
-            )
+            ),
+            # uniqueness is checked in validate_sha1, after lowercasing
+            "sha1": {"validators": []},
         }
 
 
