@@ -284,7 +284,7 @@ def check_bulk_args(request):
     try:
         names = request.data["names"]
     except KeyError:
-        raise ValueError("usage: {'names': ['id1', 'id2', ...]}")
+        raise ValueError("usage: {'names': ['id1', 'id2', ...]}") from None
     if not isinstance(names, list):
         raise ValueError("'names' must be a list of names")
     if len(names) == 0:
