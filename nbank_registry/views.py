@@ -237,16 +237,24 @@ class LocationList(generics.ListAPIView):
     filterset_class = LocationFilter
 
     def get_object(self):
-        return get_object_or_404(models.Resource, name=self.kwargs["resource_name"])
+        if not hasattr(self, "_resource"):
+            self._resource = get_object_or_404(
+                models.Resource.objects.select_related("dtype"),
+                name=self.kwargs["resource_name"],
+            )
+        return self._resource
 
     def get_queryset(self):
         resource = self.get_object()
-        return resource.location_set.all()
+        return resource.location_set.select_related("archive")
 
     def list(self, request, *args, **kwargs):
         resource = self.get_object()
         f = LocationFilter(
-            request.GET, resource.location_set.order_by("archive__accessibility")
+            request.GET,
+            resource.location_set.select_related("archive").order_by(
+                "archive__accessibility"
+            ),
         )
         qs = f.qs
         if resource.dtype.downloadable and len(request.query_params) == 0:
@@ -365,10 +373,15 @@ def bulk_location_list(request, format=None):
 
     def gen(qs):
         for resource in qs:
-            lqs = LocationFilter(
-                request.data, resource.location_set.order_by("archive__accessibility")
-            ).qs
-            if not lqs.exists():
+            lqs = list(
+                LocationFilter(
+                    request.data,
+                    resource.location_set.select_related("archive").order_by(
+                        "archive__accessibility"
+                    ),
+                ).qs
+            )
+            if not lqs:
                 continue
             if resource.dtype.downloadable and len(request.data) == 0:
                 lqs = add_virtual_registry_location(request, resource, lqs)

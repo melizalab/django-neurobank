@@ -390,6 +390,22 @@ class TestLocation:
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 1
 
+    def test_location_list_query_count_is_constant(self, client, django_assert_max_num_queries):
+        # one query for the resource (with its dtype), one for its locations
+        # (with their archives); this should not grow with the number of
+        # locations
+        for i in range(5):
+            archive = Archive.objects.create(
+                name=f"extra-{i}", scheme="neurobank", root=f"/home/data/extra-{i}"
+            )
+            Location.objects.create(resource=self.resource, archive=archive)
+        with django_assert_max_num_queries(2):
+            response = client.get(
+                reverse("neurobank:location-list", args=[self.resource])
+            )
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) == 6
+
     def test_location_list_sorted_by_accessbility(self, client):
         offline_archive = Archive.objects.create(
             name="tape",
