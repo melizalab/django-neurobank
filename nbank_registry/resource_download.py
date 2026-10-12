@@ -27,15 +27,24 @@ def local_resource_path(resource) -> Path:
 def location_to_path(location) -> Path:
     if location.archive.scheme != "neurobank":
         raise errors.SchemeNotImplementedError()
-    id = location.resource.name
+    resource = location.resource
+    id = resource.name
     id_stub = id[:2]
-    partial = Path(location.archive.root) / "resources" / id_stub / id
-    try:
-        path = resolve_extension(partial)
-    except FileNotFoundError as err:
-        raise errors.MissingFileError(location.resource, partial.parent) from err
+    stub_dir = Path(location.archive.root) / "resources" / id_stub
+    partial = stub_dir / id
+    # try the predicted names first (cheap stat calls) before globbing the
+    # whole stub directory
+    for candidate in (stub_dir / resource.filename(), partial):
+        if candidate.exists():
+            path = candidate
+            break
+    else:
+        try:
+            path = resolve_extension(partial)
+        except FileNotFoundError as err:
+            raise errors.MissingFileError(resource, stub_dir) from err
     if not path.is_file():
-        raise errors.NotAFileError(location.resource, partial)
+        raise errors.NotAFileError(resource, partial)
     return path
 
 

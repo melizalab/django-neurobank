@@ -6,12 +6,14 @@ import os
 import posixpath as ppath
 import tempfile
 import uuid
+from pathlib import Path
 
 import pytest
 from django.contrib.auth.models import Permission, User
 from django.urls import reverse
 from rest_framework import status
 
+from nbank_registry import resource_download
 from nbank_registry.models import Archive, DataType, Location, Resource
 from nbank_registry.views import DOWNLOAD_ARCHIVE_NAME
 
@@ -1280,6 +1282,35 @@ class TestDownload:
         url = reverse("neurobank:resource", args=[missing_resource])
         response = client.get(url)
         assert "download_url" not in response.data
+
+    def _no_glob(self, monkeypatch):
+        def fail(path):
+            raise AssertionError("glob fallback should not be used")
+
+        monkeypatch.setattr(resource_download, "resolve_extension", fail)
+
+    def test_lookup_uses_dtype_extension_without_glob(self, client, monkeypatch):
+        dtype = DataType.objects.create(
+            name="wav", downloadable=True, extension=".wav"
+        )
+        resource, path = self._create_file(b"wav data", dtype=dtype)
+        wav_path = Path(path).with_name(resource.filename())
+        Path(path).rename(wav_path)
+        self._no_glob(monkeypatch)
+        location = resource.location_set.get()
+        assert resource_download.location_to_path(location) == wav_path
+
+    def test_lookup_uses_bare_name_without_glob(self, client, monkeypatch):
+        resource, path = self._create_file(b"bare data")
+        bare_path = Path(path).with_name(resource.name)
+        Path(path).rename(bare_path)
+        self._no_glob(monkeypatch)
+        location = resource.location_set.get()
+        assert resource_download.location_to_path(location) == bare_path
+
+    def test_lookup_falls_back_to_glob(self, client):
+        location = self.resource.location_set.get()
+        assert resource_download.location_to_path(location) == Path(self.fs_path)
 
     def test_non_neurobank_archive_scheme(self, client):
         archive = Archive.objects.create(
