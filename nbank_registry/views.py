@@ -120,6 +120,9 @@ class ResourceFilter(filters.FilterSet):
     scheme = filters.CharFilter(
         field_name="locations__scheme", lookup_expr="istartswith", distinct=True
     )
+    experimenter = filters.CharFilter(field_name="experimenter__username")
+    animal = filters.CharFilter(field_name="animal")
+    protocol = filters.CharFilter(field_name="protocol")
 
     def filter_sha1(self, queryset, name, value):
         return queryset.filter(sha1=value.lower())
@@ -131,24 +134,32 @@ class ResourceFilter(filters.FilterSet):
         }
 
 
+# how metadata searches on the core fields map onto the fields
+CORE_FIELD_LOOKUPS = {
+    "animal": "animal",
+    "experimenter": "experimenter__username",
+    "protocol": "protocol",
+}
+
+
 class ResourceList(generics.ListCreateAPIView):
     """This view is a list of resources in the registry.
 
-    Results can be filtered using query params on name, dtype, location, sha1, etc (see OPTIONS).
+    Results can be filtered using query params on name, dtype, location, sha1,
+    experimenter, animal, protocol, etc (see OPTIONS).
 
     Results can be flexibly filtered on metadata by prefixing the query parameter
     with `metadata__`. Use django suffixes for other kinds of matches and
-    `__neq` for exclusions. For example, `?metadata__experimenter=dmeliza` will
-    return all resources with experimenter set to dmeliza,
-    `?metadata__experimenter_neq=dmeliza` will return all resources with
-    experimenter set to something else, and
-    `?metadata__experimenter__isnull=True` will return all resources without a
-    value set for `experimenter`.
+    `__neq` for exclusions. For example, `?metadata__site=3` will return all
+    resources with site set to 3, `?metadata__site__neq=3` will return all
+    resources with site set to something else, and `?metadata__site__isnull=True`
+    will return all resources without a value set for `site`. Searches on the
+    core fields (and their aliases) through `metadata__` search the fields.
 
     """
 
     queryset = models.Resource.objects.select_related(
-        "dtype", "created_by"
+        "dtype", "created_by", "experimenter"
     ).prefetch_related("locations")
     serializer_class = serializers.ResourceSerializer
     filter_backends = (filters.DjangoFilterBackend,)
@@ -162,6 +173,7 @@ class ResourceList(generics.ListCreateAPIView):
         # queries
         mf = {}
         me = {}
+        core_keys = serializers.metadata_keys()
         for k, v in self.request.GET.items():
             # try to parse the value as json, which will convert numeric values
             if k.startswith("metadata__"):
@@ -169,10 +181,14 @@ class ResourceList(generics.ListCreateAPIView):
                     v = json.loads(v)
                 except json.decoder.JSONDecodeError:
                     pass
-                if k.endswith("__neq"):
-                    me[k[:-5]] = v
-                else:
-                    mf[k] = v
+                exclude = k.endswith("__neq")
+                if exclude:
+                    k = k[:-5]
+                key, _, lookup = k.removeprefix("metadata__").partition("__")
+                field = core_keys.get(key)
+                if field is not None:
+                    k = "__".join(filter(None, (CORE_FIELD_LOOKUPS[field], lookup)))
+                (me if exclude else mf)[k] = v
         return qs.exclude(**me).filter(**mf).order_by("name")
 
     def perform_create(self, serializer):
@@ -182,7 +198,7 @@ class ResourceList(generics.ListCreateAPIView):
 class ResourceDetail(generics.RetrieveUpdateDestroyAPIView):
     lookup_field = "name"
     queryset = models.Resource.objects.select_related(
-        "dtype", "created_by"
+        "dtype", "created_by", "experimenter"
     ).prefetch_related("locations")
     serializer_class = serializers.ResourceSerializer
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
@@ -351,7 +367,7 @@ def bulk_resource_list(request, format=None):
     query = Q()
     for name in names:
         query |= Q(name=name)
-    qs = models.Resource.objects.filter(query)
+    qs = models.Resource.objects.filter(query).select_related("experimenter")
     renderer = JSONLRenderer()
     gen = (renderer.render(serializers.ResourceSerializer(obj).data) for obj in qs)
 

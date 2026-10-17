@@ -24,17 +24,29 @@ class ArchiveAdmin(admin.ModelAdmin):
 
 class ResourceAdmin(admin.ModelAdmin):
     date_hierarchy = "created_on"
-    fields = ("name", "sha1", "dtype", "metadata", "created_by")
-    list_display = ("name", "dtype", "created_by", "created_on")
+    fields = (
+        "name",
+        "sha1",
+        "dtype",
+        "experimenter",
+        "animal",
+        "protocol",
+        "metadata",
+        "created_by",
+    )
+    list_display = ("name", "dtype", "experimenter", "protocol", "created_on")
     list_filter = (
         "dtype",
         "location__archive",
         "created_by",
+        "experimenter",
     )
     search_fields = (
         "name__istartswith",
         "sha1__istartswith",
         "dtype__name",
+        "animal",
+        "protocol__istartswith",
         "metadata__icontains",
     )
     inlines = (LocationInline,)

@@ -85,6 +85,23 @@ Documentation is still in progress. We need a list of endpoints and
 supported verbs. However, the interface can be accessed through a
 browser.
 
+Besides free-form ``metadata``, each resource has three optional fields with a
+fixed form, which can be searched exactly (``?experimenter=``, ``?animal=``,
+``?protocol=``):
+
+- ``experimenter``: the username of the person who collected or produced the
+  data. It must be a user in the registry; people who don't use the registry
+  (e.g. external collaborators) can be given inactive accounts.
+- ``animal``: an identifier for the animal the data came from, stored as given.
+- ``protocol``: the name of the experimental protocol, as a slug.
+
+Clients written for API version 1.1 and earlier set and read these as
+metadata keys. The registry moves those keys out of ``metadata`` into the
+fields, copies the fields into ``metadata`` in responses, and turns
+``metadata__`` searches on them into searches of the fields. A lab can name
+other keys to treat the same way with a setting, e.g.
+``NBANK_METADATA_ALIASES = {"bird": "animal", "experiment": "protocol"}``.
+
 Deleting is not supported in the HTTP API. A fundamental concept behind
 a registry is that resources have unique identifiers, which are never
 re-used or changed. You can edit locations, metadata, and other
@@ -92,7 +109,7 @@ attributes using PUT. If you desperately need to change a name or delete
 an identifier, you’ll have to use the Django database admin or directly
 access the backing database.
 
-This application is still under development, and you should probably
+This application is still under development, and you should 
 only allow access from trusted networks. Authentication is required to
 modify or add resources, archives, or data types. Authentication uses
 the django user app, and credentials are sent in plain text. Your site

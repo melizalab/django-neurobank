@@ -27,6 +27,27 @@ class Resource(models.Model):
         "auth.User", related_name="resources", on_delete=models.CASCADE
     )
     metadata = models.JSONField(blank=True, null=True)
+    experimenter = models.ForeignKey(
+        "auth.User",
+        related_name="resources_as_experimenter",
+        on_delete=models.PROTECT,
+        blank=True,
+        null=True,
+        help_text="the person who collected or produced the data",
+    )
+    animal = models.CharField(
+        max_length=128,
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text="identifier of the animal the data came from (null if synthetic or from more than one animal)",
+    )
+    protocol = models.SlugField(
+        max_length=64,
+        blank=True,
+        null=True,
+        help_text="name of the experimental protocol used to generate the data",
+    )
 
     def __str__(self):
         return str(self.name)

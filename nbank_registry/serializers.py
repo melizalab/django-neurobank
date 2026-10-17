@@ -4,12 +4,57 @@ from __future__ import unicode_literals
 
 import re
 
+from django.conf import settings
+from django.contrib.auth.models import User
+from django.core.exceptions import ImproperlyConfigured
 from rest_framework import serializers
 from rest_framework.validators import UniqueTogetherValidator, UniqueValidator
 
 from nbank_registry.models import Archive, DataType, Location, Resource
 
 sha1_re = re.compile(r"[0-9a-fA-F]{40}")
+
+# resource fields that clients before API 1.2 sent and read in metadata. For backwards
+# compatibility, these fields are interpolated into the metadata
+CORE_FIELDS = ("animal", "experimenter", "protocol")
+
+
+def metadata_keys() -> dict[str, str]:
+    """Returns {metadata key: field} for the core fields and their aliases.
+
+    Aliases come from the NBANK_METADATA_ALIASES setting, e.g. {"bird": "animal"}.
+    """
+    keys = {field: field for field in CORE_FIELDS}
+    for alias, field in getattr(settings, "NBANK_METADATA_ALIASES", {}).items():
+        if field not in CORE_FIELDS:
+            raise ImproperlyConfigured(
+                f"NBANK_METADATA_ALIASES: '{field}' is not one of {CORE_FIELDS}"
+            )
+        keys[alias] = field
+    return keys
+
+
+def split_metadata(metadata: dict) -> tuple[dict, dict]:
+    """Splits out the core fields from metadata. Returns (other metadata, core fields).
+
+    Raises ValueError if two keys for the same field have different values.
+
+    """
+    keys = metadata_keys()
+    rest, found, found_as = {}, {}, {}
+    for key, value in metadata.items():
+        field = keys.get(key)
+        if field is None:
+            rest[key] = value
+        elif field in found and found[field] != value:
+            raise ValueError(
+                f"'{found_as[field]}' and '{key}' have different values for {field}"
+            )
+        else:
+            found[field] = value
+            found_as[field] = key
+    return rest, found
+
 
 SLUG_ERROR_MESSAGES = {
     "invalid": "can only contain letters, numbers, underscores, and hyphens"
@@ -59,7 +104,49 @@ class ResourceSerializer(serializers.ModelSerializer):
         },
     )
     created_by = serializers.ReadOnlyField(source="created_by.username")
+    experimenter = serializers.SlugRelatedField(
+        queryset=User.objects.all(),
+        slug_field="username",
+        required=False,
+        allow_null=True,
+        error_messages={
+            "does_not_exist": "no such user '{value}'",
+            "invalid": "invalid username",
+        },
+    )
     metadata = serializers.JSONField(required=False)
+
+    def to_internal_value(self, data):
+        """Moves core fields sent in metadata to their own fields."""
+        metadata = data.get("metadata") if isinstance(data, dict) else None
+        if isinstance(metadata, dict):
+            try:
+                rest, found = split_metadata(metadata)
+            except ValueError as err:
+                raise serializers.ValidationError({"metadata": [str(err)]}) from err
+            if found:
+                data = {**data, "metadata": rest}
+                for field, value in found.items():
+                    if field in data and data[field] != value:
+                        raise serializers.ValidationError(
+                            {field: ["differs from the value in metadata"]}
+                        )
+                    data[field] = value
+        return super().to_internal_value(data)
+
+    def to_representation(self, instance):
+        """Copies the core fields into metadata, where clients before API 1.2 read them."""
+        data = super().to_representation(instance)
+        copies = {f: data[f] for f in CORE_FIELDS if data.get(f) is not None}
+        if copies:
+            data["metadata"] = {**(data.get("metadata") or {}), **copies}
+        return data
+
+    def validate_animal(self, value):
+        return value or None
+
+    def validate_protocol(self, value):
+        return value or None
 
     def validate_sha1(self, value):
         """If updating, check if user has permission. Check if valid sha1"""
@@ -118,11 +205,17 @@ class ResourceSerializer(serializers.ModelSerializer):
                 Location.objects.create(resource=instance, archive=archive)
         instance.dtype = validated_data.get("dtype", instance.dtype)
         instance.sha1 = validated_data.get("sha1", instance.sha1)
-        for key, value in validated_data.get("metadata", {}).items():
-            if value is not None:
-                instance.metadata[key] = value
-            else:
-                instance.metadata.pop(key, None)
+        for field in CORE_FIELDS:
+            if field in validated_data:
+                setattr(instance, field, validated_data[field])
+        if "metadata" in validated_data:
+            metadata = dict(instance.metadata or {})
+            for key, value in validated_data["metadata"].items():
+                if value is not None:
+                    metadata[key] = value
+                else:
+                    metadata.pop(key, None)
+            instance.metadata = metadata
         instance.save()
         return instance
 
@@ -134,6 +227,9 @@ class ResourceSerializer(serializers.ModelSerializer):
             "dtype",
             "filename",
             "metadata",
+            "experimenter",
+            "animal",
+            "protocol",
             "locations",
             "created_by",
             "created_on",
@@ -144,6 +240,7 @@ class ResourceSerializer(serializers.ModelSerializer):
             ),
             # uniqueness is checked in validate_sha1, after lowercasing
             "sha1": {"validators": []},
+            "protocol": {"error_messages": SLUG_ERROR_MESSAGES},
         }
 
 
