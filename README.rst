@@ -102,6 +102,17 @@ fields, copies the fields into ``metadata`` in responses, and turns
 other keys to treat the same way with a setting, e.g.
 ``NBANK_METADATA_ALIASES = {"bird": "animal", "experiment": "protocol"}``.
 
+To move values already in metadata into the fields, run ``python manage.py
+promote_metadata --dry-run > mappings.toml``. This reports what would change
+and writes a template listing every value found, with values that can't be
+stored (an experimenter who isn't a user, a protocol that isn't a slug) first.
+Edit it to add aliases, inactive users to create, and value mappings (``"old" =
+"new"``, or ``"old" = { move = "key" }`` to keep a value in metadata under
+another key and leave the field empty), then repeat the dry run with
+``--mappings mappings.toml`` until the report looks right, and run it without
+``--dry-run``. Values that can't be stored, and resources whose values conflict,
+are left in metadata. The command can be run again.
+
 Deleting is not supported in the HTTP API. A fundamental concept behind
 a registry is that resources have unique identifiers, which are never
 re-used or changed. You can edit locations, metadata, and other
