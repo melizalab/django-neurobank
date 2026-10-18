@@ -124,6 +124,19 @@ class ResourceFilter(filters.FilterSet):
     experimenter = filters.CharFilter(field_name="experimenter__username")
     animal = filters.CharFilter(field_name="animal")
     protocol = filters.CharFilter(field_name="protocol")
+    # exclusions keep resources with no value for the field
+    experimenter__neq = filters.CharFilter(
+        field_name="experimenter__username", exclude=True
+    )
+    animal__neq = filters.CharFilter(field_name="animal", exclude=True)
+    protocol__neq = filters.CharFilter(field_name="protocol", exclude=True)
+    experimenter__isnull = filters.BooleanFilter(
+        field_name="experimenter", lookup_expr="isnull"
+    )
+    animal__isnull = filters.BooleanFilter(field_name="animal", lookup_expr="isnull")
+    protocol__isnull = filters.BooleanFilter(
+        field_name="protocol", lookup_expr="isnull"
+    )
 
     def filter_sha1(self, queryset, name, value):
         return queryset.filter(sha1=value.lower())
@@ -151,7 +164,8 @@ class ResourceList(generics.ListCreateAPIView):
     """This view is a list of resources in the registry.
 
     Results can be filtered using query params on name, dtype, location, sha1,
-    experimenter, animal, protocol, etc (see OPTIONS).
+    experimenter, animal, protocol, etc (see OPTIONS). The last three also take
+    `__neq` and `__isnull`.
 
     Results can be flexibly filtered on metadata by prefixing the query parameter
     with `metadata__`. Use django suffixes for other kinds of matches and

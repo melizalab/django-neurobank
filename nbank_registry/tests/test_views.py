@@ -1533,6 +1533,28 @@ class TestCoreFields:
         assert names({"metadata__protocol__neq": "chorus"}) == [b]
         assert names({"metadata__protocol__startswith": "arc"}) == [b]
 
+    def test_can_exclude_and_filter_null_core_fields(self, client, auth_client):
+        a = self.create(
+            auth_client, experimenter="smm3rc", animal="P50", protocol="chorus"
+        ).data["name"]
+        b = self.create(auth_client, animal="P51").data["name"]
+        url = reverse("neurobank:resource-list")
+
+        def names(params):
+            response = client.get(url, params)
+            assert response.status_code == status.HTTP_200_OK
+            return {r["name"] for r in response.data}
+
+        # exclusions keep resources with no value
+        assert names({"experimenter__neq": "smm3rc"}) == {b}
+        assert names({"animal__neq": "P50"}) == {b}
+        assert names({"protocol__neq": "chorus"}) == {b}
+        assert names({"experimenter__isnull": "true"}) == {b}
+        assert names({"experimenter__isnull": "False"}) == {a}
+        assert names({"animal__isnull": "true"}) == set()
+        assert names({"protocol__isnull": "true"}) == {b}
+        assert names({"protocol__isnull": "false"}) == {a}
+
     def test_bulk_records_include_core_fields(self, client, auth_client):
         response = self.create(auth_client, experimenter="smm3rc", animal="P50")
         name = response.data["name"]

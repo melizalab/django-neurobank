@@ -87,7 +87,8 @@ browser.
 
 Besides free-form ``metadata``, each resource has three optional fields with a
 fixed form, which can be searched exactly (``?experimenter=``, ``?animal=``,
-``?protocol=``):
+``?protocol=``), excluded (``?protocol__neq=``), or tested for a missing value
+(``?animal__isnull=true``):
 
 - ``experimenter``: the username of the person who collected or produced the
   data. It must be a user in the registry; people who don't use the registry
