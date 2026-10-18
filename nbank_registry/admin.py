@@ -30,11 +30,10 @@ class ResourceAdmin(admin.ModelAdmin):
         "dtype",
         "experimenter",
         "animal",
-        "protocol",
         "metadata",
         "created_by",
     )
-    list_display = ("name", "dtype", "experimenter", "protocol", "created_on")
+    list_display = ("name", "dtype", "experimenter", "animal", "created_on")
     list_filter = (
         "dtype",
         "location__archive",
@@ -46,7 +45,6 @@ class ResourceAdmin(admin.ModelAdmin):
         "sha1__istartswith",
         "dtype__name",
         "animal",
-        "protocol__istartswith",
         "metadata__icontains",
     )
     inlines = (LocationInline,)

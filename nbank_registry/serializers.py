@@ -16,7 +16,7 @@ sha1_re = re.compile(r"[0-9a-fA-F]{40}")
 
 # resource fields that clients before API 1.2 sent and read in metadata. For backwards
 # compatibility, these fields are interpolated into the metadata
-CORE_FIELDS = ("animal", "experimenter", "protocol")
+CORE_FIELDS = ("animal", "experimenter")
 
 
 def metadata_keys() -> dict[str, str]:
@@ -145,9 +145,6 @@ class ResourceSerializer(serializers.ModelSerializer):
     def validate_animal(self, value):
         return value or None
 
-    def validate_protocol(self, value):
-        return value or None
-
     def validate_sha1(self, value):
         """If updating, check if user has permission. Check if valid sha1"""
         if value is not None:
@@ -229,7 +226,6 @@ class ResourceSerializer(serializers.ModelSerializer):
             "metadata",
             "experimenter",
             "animal",
-            "protocol",
             "locations",
             "created_by",
             "created_on",
@@ -240,7 +236,6 @@ class ResourceSerializer(serializers.ModelSerializer):
             ),
             # uniqueness is checked in validate_sha1, after lowercasing
             "sha1": {"validators": []},
-            "protocol": {"error_messages": SLUG_ERROR_MESSAGES},
         }
 
 

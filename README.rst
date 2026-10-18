@@ -85,28 +85,27 @@ Documentation is still in progress. We need a list of endpoints and
 supported verbs. However, the interface can be accessed through a
 browser.
 
-Besides free-form ``metadata``, each resource has three optional fields with a
-fixed form, which can be searched exactly (``?experimenter=``, ``?animal=``,
-``?protocol=``), excluded (``?protocol__neq=``), or tested for a missing value
+Besides free-form ``metadata``, each resource has two optional fields with a
+fixed form, which can be searched exactly (``?experimenter=``, ``?animal=``),
+excluded (``?animal__neq=``), or tested for a missing value
 (``?animal__isnull=true``):
 
 - ``experimenter``: the username of the person who collected or produced the
   data. It must be a user in the registry; people who don't use the registry
   (e.g. external collaborators) can be given inactive accounts.
 - ``animal``: an identifier for the animal the data came from, stored as given.
-- ``protocol``: the name of the experimental protocol, as a slug.
 
 Clients written for API version 1.1 and earlier set and read these as
 metadata keys. The registry moves those keys out of ``metadata`` into the
 fields, copies the fields into ``metadata`` in responses, and turns
 ``metadata__`` searches on them into searches of the fields. A lab can name
 other keys to treat the same way with a setting, e.g.
-``NBANK_METADATA_ALIASES = {"bird": "animal", "experiment": "protocol"}``.
+``NBANK_METADATA_ALIASES = {"bird": "animal"}``.
 
 To move values already in metadata into the fields, run ``python manage.py
 promote_metadata --dry-run > mappings.toml``. This reports what would change
 and writes a template listing every value found, with values that can't be
-stored (an experimenter who isn't a user, a protocol that isn't a slug) first.
+stored (such as an experimenter who isn't a user) first.
 Edit it to add aliases, inactive users to create, and value mappings (``"old" =
 "new"``, or ``"old" = { move = "key" }`` to keep a value in metadata under
 another key and leave the field empty), then repeat the dry run with

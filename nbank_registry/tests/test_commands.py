@@ -43,58 +43,55 @@ def promote(tmp_path, mappings=None, *args):
 
 
 def test_valid_values_are_moved(tmp_path, make, user):
-    res = make(
-        {"experimenter": "user", "animal": f" {UUID} ", "protocol": "chorus", "pen": 1}
-    )
+    res = make({"experimenter": "user", "animal": f" {UUID} ", "pen": 1})
     promote(tmp_path)
     res.refresh_from_db()
     assert res.experimenter == user
-    assert (res.animal, res.protocol) == (UUID, "chorus")
+    assert res.animal == UUID
     assert res.metadata == {"pen": 1}
 
 
+def test_other_keys_are_left_in_metadata(tmp_path, make):
+    res = make({"protocol": "chorus", "experiment": "chorus"})
+    _, err = promote(tmp_path)
+    res.refresh_from_db()
+    assert res.metadata == {"protocol": "chorus", "experiment": "chorus"}
+    assert "changed 0" in err
+
+
 def test_invalid_values_are_left_in_metadata(tmp_path, make):
-    metadata = {"experimenter": "nobody", "protocol": "not a slug", "animal": [1]}
+    metadata = {"experimenter": "nobody", "animal": [1]}
     res = make(metadata)
     _, err = promote(tmp_path)
     res.refresh_from_db()
     assert res.metadata == metadata
-    assert (res.experimenter, res.animal, res.protocol) == (None, None, None)
+    assert (res.experimenter, res.animal) == (None, None)
     assert "unresolved 1" in err
 
 
 def test_dry_run_changes_nothing(tmp_path, make):
-    res = make({"protocol": "chorus"})
+    res = make({"animal": "P50"})
     _, err = promote(tmp_path, None, "--dry-run")
     res.refresh_from_db()
-    assert res.protocol is None
-    assert res.metadata == {"protocol": "chorus"}
+    assert res.animal is None
+    assert res.metadata == {"animal": "P50"}
     assert "would change 1" in err
 
 
-def test_aliases_from_mappings_and_settings(tmp_path, make, settings):
+def test_aliases_from_mappings_and_settings(tmp_path, make, user, settings):
     settings.NBANK_METADATA_ALIASES = {"bird": "animal"}
-    res = make({"bird": "P50", "experiment": "chorus"})
-    promote(tmp_path, '[aliases]\nexperiment = "protocol"\n')
+    res = make({"bird": "P50", "experiemtner": "user"})
+    promote(tmp_path, '[aliases]\nexperiemtner = "experimenter"\n')
     res.refresh_from_db()
-    assert (res.animal, res.protocol) == ("P50", "chorus")
+    assert (res.animal, res.experimenter) == ("P50", user)
     assert res.metadata == {}
 
 
-def test_values_are_mapped(tmp_path, make):
-    res = make({"protocol": "song_chorus", "animal": "B2"})
-    promote(
-        tmp_path, f'[protocol]\nsong_chorus = "song-chorus"\n[animal]\nB2 = "{UUID}"\n'
-    )
+def test_values_are_mapped(tmp_path, make, user):
+    res = make({"experimenter": "bbellanger", "animal": "B2"})
+    promote(tmp_path, f'[experimenter]\nbbellanger = "user"\n[animal]\nB2 = "{UUID}"\n')
     res.refresh_from_db()
-    assert (res.animal, res.protocol) == (UUID, "song-chorus")
-
-
-def test_mapping_makes_an_invalid_value_valid(tmp_path, make, user):
-    res = make({"experimenter": "bbellanger"})
-    promote(tmp_path, '[experimenter]\nbbellanger = "user"\n')
-    res.refresh_from_db()
-    assert res.experimenter == user
+    assert (res.experimenter, res.animal) == (user, UUID)
     assert res.metadata == {}
 
 
@@ -130,14 +127,13 @@ def test_dry_run_creates_no_users(tmp_path, make):
     assert "would change 1" in err
 
 
-def test_keys_that_disagree_are_a_conflict(tmp_path, make, settings):
+def test_keys_that_disagree_are_a_conflict(tmp_path, make, user, settings):
     settings.NBANK_METADATA_ALIASES = {"bird": "animal"}
-    metadata = {"bird": "P50", "animal": "P51", "protocol": "chorus"}
-    res = make(metadata)
+    res = make({"bird": "P50", "animal": "P51", "experimenter": "user"})
     _, err = promote(tmp_path)
     res.refresh_from_db()
     # the other fields are still moved
-    assert res.protocol == "chorus"
+    assert res.experimenter == user
     assert res.metadata == {"bird": "P50", "animal": "P51"}
     assert f"conflict in {res.name}: animal" in err
 
@@ -152,12 +148,12 @@ def test_keys_that_map_to_the_same_value_agree(tmp_path, make, settings):
 
 
 def test_field_already_set_to_another_value_is_a_conflict(tmp_path, make):
-    res = make({"protocol": "chorus"}, protocol="other")
+    res = make({"animal": "P50"}, animal="P51")
     _, err = promote(tmp_path)
     res.refresh_from_db()
-    assert res.protocol == "other"
-    assert res.metadata == {"protocol": "chorus"}
-    assert "already 'other'" in err
+    assert res.animal == "P51"
+    assert res.metadata == {"animal": "P50"}
+    assert "already 'P51'" in err
 
 
 def test_blank_values_are_removed(tmp_path, make):
@@ -169,11 +165,11 @@ def test_blank_values_are_removed(tmp_path, make):
 
 
 def test_runs_in_batches(tmp_path, make):
-    resources = [make({"protocol": f"p{i}"}) for i in range(5)]
+    resources = [make({"animal": f"P{i}"}) for i in range(5)]
     _, err = promote(tmp_path, None, "--batch-size", "2")
     assert "changed 5" in err
-    assert [Resource.objects.get(pk=r.pk).protocol for r in resources] == [
-        f"p{i}" for i in range(5)
+    assert [Resource.objects.get(pk=r.pk).animal for r in resources] == [
+        f"P{i}" for i in range(5)
     ]
 
 
@@ -181,70 +177,63 @@ def test_runs_in_batches(tmp_path, make):
     "mappings",
     [
         "[bird]\n",
+        '[protocol]\nsong_chorus = "song-chorus"\n',
         '[aliases]\nbird = "species"\n',
-        '[aliases]\nanimal = "protocol"\n',
+        '[aliases]\nexperiment = "protocol"\n',
+        '[aliases]\nanimal = "experimenter"\n',
         '[users]\ncreate = ["not a name"]\n',
         '[experimenter]\nbbellanger = "nobody"\n',
-        '[protocol]\nsong_chorus = "song chorus"\n',
-        '[protocol]\nsong_chorus = ""\n',
+        '[animal]\nB2 = ""\n',
         '[animal]\nsynthetic = { move = "animal" }\n',
         '[animal]\nsynthetic = { rename = "source" }\n',
         "not toml",
     ],
 )
 def test_bad_mappings_are_refused(tmp_path, make, mappings):
-    res = make({"protocol": "chorus"})
+    res = make({"animal": "P50"})
     with pytest.raises(CommandError):
         promote(tmp_path, mappings)
     res.refresh_from_db()
-    assert res.metadata == {"protocol": "chorus"}
+    assert res.metadata == {"animal": "P50"}
 
 
 def test_template(tmp_path, make, settings):
     settings.NBANK_METADATA_ALIASES = {"bird": "animal"}
-    make({"experimenter": "bple", "bird": "B2", "protocol": "song chorus"})
-    make({"experimenter": "user", "bird": UUID, "protocol": "chorus"})
+    make({"experimenter": "bple", "bird": "B2"})
+    make({"experimenter": "user", "bird": UUID, "animal": "x" * 129})
     make({"experimenter": "bple", "bird": "synthetic"})
     out, _ = promote(
         tmp_path,
-        '[aliases]\nexperiment = "protocol"\n[animal]\nsynthetic = { move = "source" }\n',
+        '[aliases]\nexperiemtner = "experimenter"\n'
+        '[animal]\nsynthetic = { move = "source" }\n',
         "--dry-run",
     )
     template = tomllib.loads(out)
     # mappings carry over; found values are commented out
     assert template == {
-        "aliases": {"experiment": "protocol"},
+        "aliases": {"experiemtner": "experimenter"},
         "users": {"create": []},
         "experimenter": {},
         "animal": {"synthetic": {"move": "source"}},
-        "protocol": {},
     }
     lines = out.splitlines()
     assert '    # "bple",  # 2 resources' in lines
     assert '# "bird" = "animal"  # from NBANK_METADATA_ALIASES' in lines
     assert '"synthetic" = { move = "source" }  # 1 resources' in lines
-    assert '# "song chorus" = ""  # 1 resources: not a slug' in lines
+    assert f'# "{"x" * 129}" = ""  # 1 resources: longer than 128 characters' in lines
     # values that can't be stored come first
     assert lines.index('# "bple" = ""  # 2 resources: no such user') < lines.index(
         '# "user" = ""  # 1 resources'
     )
 
 
-def test_template_round_trips(tmp_path, make):
-    make({"experimenter": "bple", "protocol": "song_chorus"})
+def test_template_round_trips(tmp_path, make, user):
+    make({"experimenter": "bple", "animal": "B2"})
     out, _ = promote(tmp_path, None, "--dry-run")
     filled = out.replace('    # "bple",', '    "bple",').replace(
-        '# "song_chorus" = ""', '"song_chorus" = "song-chorus"'
+        '# "B2" = ""', f'"B2" = "{UUID}"'
     )
     out, err = promote(tmp_path, filled, "--dry-run")
     assert "would change 1" in err
     assert tomllib.loads(out)["users"] == {"create": ["bple"]}
-    assert tomllib.loads(out)["protocol"] == {"song_chorus": "song-chorus"}
-
-
-def test_value_too_long_for_field_is_left(tmp_path, make):
-    res = make({"protocol": "p" * 65})
-    out, _ = promote(tmp_path, None, "--dry-run")
-    res.refresh_from_db()
-    assert res.protocol is None
-    assert "longer than 64 characters" in out
+    assert tomllib.loads(out)["animal"] == {"B2": UUID}

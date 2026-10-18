@@ -42,12 +42,6 @@ class Resource(models.Model):
         db_index=True,
         help_text="identifier of the animal the data came from (null if synthetic or from more than one animal)",
     )
-    protocol = models.SlugField(
-        max_length=64,
-        blank=True,
-        null=True,
-        help_text="name of the experimental protocol used to generate the data",
-    )
 
     def __str__(self):
         return str(self.name)

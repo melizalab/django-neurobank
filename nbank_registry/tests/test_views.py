@@ -1385,13 +1385,12 @@ class TestCoreFields:
             auth_client,
             experimenter="smm3rc",
             animal="P50",
-            protocol="chorus",
             metadata={"pen": 1},
         )
         assert response.status_code == status.HTTP_201_CREATED
         resource = Resource.objects.get(name=response.data["name"])
         assert resource.experimenter == self.experimenter
-        assert (resource.animal, resource.protocol) == ("P50", "chorus")
+        assert resource.animal == "P50"
         assert resource.metadata == {"pen": 1}
         assert response.data["experimenter"] == "smm3rc"
         # copied into metadata for older clients
@@ -1399,35 +1398,35 @@ class TestCoreFields:
             "pen": 1,
             "experimenter": "smm3rc",
             "animal": "P50",
-            "protocol": "chorus",
         }
 
     def test_core_fields_in_metadata_are_moved(self, auth_client):
         response = self.create(
-            auth_client, metadata={"experimenter": "smm3rc", "protocol": "chorus"}
+            auth_client,
+            metadata={"experimenter": "smm3rc", "animal": "P50", "protocol": "chorus"},
         )
         assert response.status_code == status.HTTP_201_CREATED
         resource = Resource.objects.get(name=response.data["name"])
         assert resource.experimenter == self.experimenter
-        assert resource.protocol == "chorus"
-        assert resource.metadata == {}
+        assert resource.animal == "P50"
+        # protocol is ordinary metadata
+        assert resource.metadata == {"protocol": "chorus"}
 
     def test_aliases_in_metadata_are_moved(self, auth_client, settings):
-        settings.NBANK_METADATA_ALIASES = {"bird": "animal", "experiment": "protocol"}
-        response = self.create(
-            auth_client, metadata={"bird": "P50", "experiment": "chorus", "pen": 1}
-        )
+        settings.NBANK_METADATA_ALIASES = {"bird": "animal"}
+        response = self.create(auth_client, metadata={"bird": "P50", "pen": 1})
         assert response.status_code == status.HTTP_201_CREATED
         resource = Resource.objects.get(name=response.data["name"])
-        assert (resource.animal, resource.protocol) == ("P50", "chorus")
+        assert resource.animal == "P50"
         assert resource.metadata == {"pen": 1}
 
     def test_alias_must_name_a_core_field(self, auth_client, settings):
         from django.core.exceptions import ImproperlyConfigured
 
-        settings.NBANK_METADATA_ALIASES = {"bird": "species"}
-        with pytest.raises(ImproperlyConfigured):
-            self.create(auth_client, metadata={"bird": "P50"})
+        for target in ("species", "protocol"):
+            settings.NBANK_METADATA_ALIASES = {"bird": target}
+            with pytest.raises(ImproperlyConfigured):
+                self.create(auth_client, metadata={"bird": "P50"})
 
     def test_conflicting_values_are_refused(self, auth_client, settings):
         settings.NBANK_METADATA_ALIASES = {"bird": "animal"}
@@ -1451,39 +1450,31 @@ class TestCoreFields:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert Resource.objects.count() == 0
 
-    @pytest.mark.parametrize("bad", ["bad name", "chorus!", "a" * 65])
-    def test_protocol_must_be_a_slug(self, auth_client, bad):
-        response = self.create(auth_client, protocol=bad)
-        assert response.status_code == status.HTTP_400_BAD_REQUEST
-        assert "protocol" in response.data
-
     def test_blank_values_are_stored_as_null(self, auth_client):
-        response = self.create(auth_client, animal="", protocol="")
+        response = self.create(auth_client, animal="")
         assert response.status_code == status.HTTP_201_CREATED
         resource = Resource.objects.get(name=response.data["name"])
-        assert (resource.animal, resource.protocol) == (None, None)
+        assert resource.animal is None
 
     def test_can_update_core_fields_through_metadata(self, auth_client):
         response = self.create(
-            auth_client, protocol="chorus", metadata={"pen": 1, "site": 3}
+            auth_client, animal="P50", metadata={"pen": 1, "site": 3}
         )
         url = reverse("neurobank:resource", args=[response.data["name"]])
         response = auth_client.patch(
             url,
-            {"metadata": {"protocol": "arc6", "experimenter": "smm3rc", "site": 4}},
+            {"metadata": {"animal": "P51", "experimenter": "smm3rc", "site": 4}},
             format="json",
         )
         assert response.status_code == status.HTTP_200_OK
         resource = Resource.objects.get(name=response.data["name"])
-        assert (resource.protocol, resource.experimenter) == ("arc6", self.experimenter)
+        assert (resource.animal, resource.experimenter) == ("P51", self.experimenter)
         assert resource.metadata == {"pen": 1, "site": 4}
         # setting a key to None clears it, as for other metadata
-        response = auth_client.patch(
-            url, {"metadata": {"protocol": None}}, format="json"
-        )
+        response = auth_client.patch(url, {"metadata": {"animal": None}}, format="json")
         assert response.status_code == status.HTTP_200_OK
         resource.refresh_from_db()
-        assert resource.protocol is None
+        assert resource.animal is None
 
     def test_can_update_metadata_when_it_is_null(self, auth_client):
         resource = Resource.objects.create(dtype=self.dtype, created_by=self.user)
@@ -1503,20 +1494,15 @@ class TestCoreFields:
         record = auth_client.get(url).data
         response = auth_client.put(
             url,
-            {
-                k: record[k]
-                for k in ("dtype", "experimenter", "animal", "protocol", "metadata")
-            },
+            {k: record[k] for k in ("dtype", "experimenter", "animal", "metadata")},
             format="json",
         )
         assert response.status_code == status.HTTP_200_OK
 
     def test_can_filter_by_core_fields(self, client, auth_client, settings):
         settings.NBANK_METADATA_ALIASES = {"bird": "animal"}
-        a = self.create(
-            auth_client, experimenter="smm3rc", animal="P50", protocol="chorus"
-        ).data["name"]
-        b = self.create(auth_client, animal="P51", protocol="arc6").data["name"]
+        a = self.create(auth_client, experimenter="smm3rc", animal="P50").data["name"]
+        b = self.create(auth_client, animal="P51").data["name"]
         url = reverse("neurobank:resource-list")
 
         def names(params):
@@ -1526,18 +1512,15 @@ class TestCoreFields:
 
         assert names({"experimenter": "smm3rc"}) == [a]
         assert names({"animal": "P51"}) == [b]
-        assert names({"protocol": "chorus"}) == [a]
         # searches through metadata, as older clients send them, search the fields
         assert names({"metadata__experimenter": "smm3rc"}) == [a]
         assert names({"metadata__bird": "P51"}) == [b]
-        assert names({"metadata__protocol__neq": "chorus"}) == [b]
-        assert names({"metadata__protocol__startswith": "arc"}) == [b]
+        assert names({"metadata__animal__neq": "P50"}) == [b]
+        assert set(names({"metadata__animal__startswith": "P5"})) == {a, b}
 
     def test_can_exclude_and_filter_null_core_fields(self, client, auth_client):
-        a = self.create(
-            auth_client, experimenter="smm3rc", animal="P50", protocol="chorus"
-        ).data["name"]
-        b = self.create(auth_client, animal="P51").data["name"]
+        a = self.create(auth_client, experimenter="smm3rc", animal="P50").data["name"]
+        b = self.create(auth_client).data["name"]
         url = reverse("neurobank:resource-list")
 
         def names(params):
@@ -1548,12 +1531,10 @@ class TestCoreFields:
         # exclusions keep resources with no value
         assert names({"experimenter__neq": "smm3rc"}) == {b}
         assert names({"animal__neq": "P50"}) == {b}
-        assert names({"protocol__neq": "chorus"}) == {b}
         assert names({"experimenter__isnull": "true"}) == {b}
         assert names({"experimenter__isnull": "False"}) == {a}
-        assert names({"animal__isnull": "true"}) == set()
-        assert names({"protocol__isnull": "true"}) == {b}
-        assert names({"protocol__isnull": "false"}) == {a}
+        assert names({"animal__isnull": "true"}) == {b}
+        assert names({"animal__isnull": "false"}) == {a}
 
     def test_bulk_records_include_core_fields(self, client, auth_client):
         response = self.create(auth_client, experimenter="smm3rc", animal="P50")

@@ -1,5 +1,5 @@
 # -*- mode: python -*-
-"""Moves experimenter, animal, and protocol out of resource metadata into their fields."""
+"""Moves experimenter and animal out of resource metadata into their fields."""
 
 import json
 import sys
@@ -14,7 +14,6 @@ else:
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
-from django.core.validators import validate_slug
 from django.db import transaction
 
 from nbank_registry.models import Resource
@@ -39,11 +38,6 @@ def check_value(field: str, value: str, users: set[str]) -> str | None:
     max_length = Resource._meta.get_field(field).max_length
     if len(value) > max_length:
         return f"longer than {max_length} characters"
-    if field == "protocol":
-        try:
-            validate_slug(value)
-        except ValidationError:
-            return "not a slug"
     return None
 
 
@@ -119,7 +113,7 @@ class Mappings:
 
 class Command(BaseCommand):
     help = (
-        "Moves experimenter, animal, and protocol values out of resource metadata "
+        "Moves experimenter and animal values out of resource metadata "
         "into the fields. Values that can't be stored, and resources whose values "
         "conflict, are left as they are and reported."
     )

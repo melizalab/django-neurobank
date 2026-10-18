@@ -35,14 +35,4 @@ class Migration(migrations.Migration):
                 to=settings.AUTH_USER_MODEL,
             ),
         ),
-        migrations.AddField(
-            model_name="resource",
-            name="protocol",
-            field=models.SlugField(
-                blank=True,
-                help_text="name of the experimental protocol used to generate the data",
-                max_length=64,
-                null=True,
-            ),
-        ),
     ]
