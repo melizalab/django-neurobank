@@ -1046,6 +1046,40 @@ class TestResourceFilter:
         assert len(response.data) == 1
         assert response.data[0]["name"] == str(self.resource1)
 
+    @pytest.mark.parametrize("value", ["false", "False", "FALSE", "0"])
+    def test_can_filter_metadata_isnull_false(self, client, value):
+        response = client.get(
+            reverse("neurobank:resource-list"), {"metadata__strint_val__isnull": value}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert [r["name"] for r in response.data] == [str(self.resource1)]
+
+    @pytest.mark.parametrize("value", ["true", "True", "1"])
+    def test_can_filter_metadata_isnull_true(self, client, value):
+        response = client.get(
+            reverse("neurobank:resource-list"), {"metadata__strint_val__isnull": value}
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert [r["name"] for r in response.data] == [str(self.resource2)]
+
+    def test_can_filter_core_field_isnull_through_metadata(self, client):
+        self.resource2.experimenter = None
+        self.resource2.save()
+        response = client.get(
+            reverse("neurobank:resource-list"),
+            {"metadata__experimenter__isnull": "False"},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert [r["name"] for r in response.data] == [str(self.resource1)]
+
+    def test_invalid_isnull_value_is_a_bad_request(self, client):
+        response = client.get(
+            reverse("neurobank:resource-list"),
+            {"metadata__strint_val__isnull": "maybe"},
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "metadata__strint_val__isnull" in response.data
+
 
 class TestResourceFilterDistinct:
     """Filters that join across locations should not return duplicate resources"""

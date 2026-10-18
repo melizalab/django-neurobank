@@ -13,6 +13,7 @@ from django_sendfile import sendfile
 from drf_link_header_pagination import LinkHeaderPagination
 from rest_framework import generics, permissions, status
 from rest_framework.decorators import api_view
+from rest_framework.exceptions import ValidationError
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
@@ -142,6 +143,10 @@ CORE_FIELD_LOOKUPS = {
 }
 
 
+# values accepted for metadata__<key>__isnull, case-insensitively
+ISNULL_VALUES = {"true": True, "1": True, "false": False, "0": False}
+
+
 class ResourceList(generics.ListCreateAPIView):
     """This view is a list of resources in the registry.
 
@@ -174,16 +179,25 @@ class ResourceList(generics.ListCreateAPIView):
         mf = {}
         me = {}
         core_keys = serializers.metadata_keys()
-        for k, v in self.request.GET.items():
-            # try to parse the value as json, which will convert numeric values
-            if k.startswith("metadata__"):
-                try:
-                    v = json.loads(v)
-                except json.decoder.JSONDecodeError:
-                    pass
+        for param, v in self.request.GET.items():
+            if param.startswith("metadata__"):
+                k = param
                 exclude = k.endswith("__neq")
                 if exclude:
                     k = k[:-5]
+                if k.endswith("__isnull"):
+                    try:
+                        v = ISNULL_VALUES[v.lower()]
+                    except KeyError:
+                        raise ValidationError(
+                            {param: ["must be true or false"]}
+                        ) from None
+                else:
+                    # try to parse the value as json, which will convert numeric values
+                    try:
+                        v = json.loads(v)
+                    except json.decoder.JSONDecodeError:
+                        pass
                 key, _, lookup = k.removeprefix("metadata__").partition("__")
                 field = core_keys.get(key)
                 if field is not None:
