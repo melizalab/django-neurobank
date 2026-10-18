@@ -1368,10 +1368,11 @@ def test_api_info_reports_version_1_2(client):
 
 class TestCoreFields:
     @pytest.fixture(autouse=True)
-    def setup(self, user):
+    def setup(self, user, animal):
         self.user = user
         self.dtype = DataType.objects.create(name="ext-arf", content_type="x")
         self.experimenter = User.objects.create(username="smm3rc", is_active=False)
+        self.p50, self.p51 = animal("P50"), animal("P51")
 
     def create(self, auth_client, **fields):
         return auth_client.post(
@@ -1380,45 +1381,43 @@ class TestCoreFields:
             format="json",
         )
 
+    def stored(self, response):
+        """Returns (animal, experimenter, metadata) of the resource in the response"""
+        resource = Resource.objects.get(name=response.data["name"])
+        animal = str(resource.animal_id) if resource.animal_id else None
+        return animal, resource.experimenter, resource.metadata
+
     def test_can_create_resource_with_core_fields(self, auth_client):
         response = self.create(
-            auth_client,
-            experimenter="smm3rc",
-            animal="P50",
-            metadata={"pen": 1},
+            auth_client, experimenter="smm3rc", animal=self.p50, metadata={"pen": 1}
         )
         assert response.status_code == status.HTTP_201_CREATED
-        resource = Resource.objects.get(name=response.data["name"])
-        assert resource.experimenter == self.experimenter
-        assert resource.animal == "P50"
-        assert resource.metadata == {"pen": 1}
-        assert response.data["experimenter"] == "smm3rc"
+        assert self.stored(response) == (self.p50, self.experimenter, {"pen": 1})
+        assert (response.data["experimenter"], response.data["animal"]) == (
+            "smm3rc",
+            self.p50,
+        )
         # copied into metadata for older clients
         assert response.data["metadata"] == {
             "pen": 1,
             "experimenter": "smm3rc",
-            "animal": "P50",
+            "animal": self.p50,
         }
 
     def test_core_fields_in_metadata_are_moved(self, auth_client):
         response = self.create(
             auth_client,
-            metadata={"experimenter": "smm3rc", "animal": "P50", "protocol": "chorus"},
+            metadata={"experimenter": "smm3rc", "animal": self.p50, "protocol": "x"},
         )
         assert response.status_code == status.HTTP_201_CREATED
-        resource = Resource.objects.get(name=response.data["name"])
-        assert resource.experimenter == self.experimenter
-        assert resource.animal == "P50"
         # protocol is ordinary metadata
-        assert resource.metadata == {"protocol": "chorus"}
+        assert self.stored(response) == (self.p50, self.experimenter, {"protocol": "x"})
 
     def test_aliases_in_metadata_are_moved(self, auth_client, settings):
         settings.NBANK_METADATA_ALIASES = {"bird": "animal"}
-        response = self.create(auth_client, metadata={"bird": "P50", "pen": 1})
+        response = self.create(auth_client, metadata={"bird": self.p50, "pen": 1})
         assert response.status_code == status.HTTP_201_CREATED
-        resource = Resource.objects.get(name=response.data["name"])
-        assert resource.animal == "P50"
-        assert resource.metadata == {"pen": 1}
+        assert self.stored(response) == (self.p50, None, {"pen": 1})
 
     def test_alias_must_name_a_core_field(self, auth_client, settings):
         from django.core.exceptions import ImproperlyConfigured
@@ -1426,20 +1425,26 @@ class TestCoreFields:
         for target in ("species", "protocol"):
             settings.NBANK_METADATA_ALIASES = {"bird": target}
             with pytest.raises(ImproperlyConfigured):
-                self.create(auth_client, metadata={"bird": "P50"})
+                self.create(auth_client, metadata={"bird": self.p50})
 
     def test_conflicting_values_are_refused(self, auth_client, settings):
         settings.NBANK_METADATA_ALIASES = {"bird": "animal"}
-        response = self.create(auth_client, metadata={"bird": "P50", "animal": "P51"})
+        response = self.create(
+            auth_client, metadata={"bird": self.p50, "animal": self.p51}
+        )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "metadata" in response.data
-        response = self.create(auth_client, animal="P50", metadata={"animal": "P51"})
+        response = self.create(
+            auth_client, animal=self.p50, metadata={"animal": self.p51}
+        )
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert "animal" in response.data
         assert Resource.objects.count() == 0
 
     def test_matching_values_are_accepted(self, auth_client):
-        response = self.create(auth_client, animal="P50", metadata={"animal": "P50"})
+        response = self.create(
+            auth_client, animal=self.p50, metadata={"animal": self.p50}
+        )
         assert response.status_code == status.HTTP_201_CREATED
 
     def test_experimenter_must_be_a_user(self, auth_client):
@@ -1450,46 +1455,63 @@ class TestCoreFields:
         assert response.status_code == status.HTTP_400_BAD_REQUEST
         assert Resource.objects.count() == 0
 
+    @pytest.mark.parametrize(
+        "bad", ["P99", "15db7d088-f7c5-4bed-b77d-77ac55583174", "a" * 200]
+    )
+    def test_animal_must_exist(self, auth_client, bad):
+        response = self.create(auth_client, animal=bad)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert f"no such animal '{bad}'" in str(response.data["animal"])
+        response = self.create(auth_client, metadata={"animal": bad})
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert Resource.objects.count() == 0
+
+    def test_animal_is_matched_by_primary_key(self, auth_client):
+        # a UUID matches in capitals; names are compared as they are
+        response = self.create(auth_client, animal=self.p50.upper())
+        assert response.status_code == status.HTTP_201_CREATED
+        assert self.stored(response)[0] == self.p50
+        assert response.data["animal"] == self.p50
+
     def test_blank_values_are_stored_as_null(self, auth_client):
         response = self.create(auth_client, animal="")
         assert response.status_code == status.HTTP_201_CREATED
-        resource = Resource.objects.get(name=response.data["name"])
-        assert resource.animal is None
+        assert self.stored(response)[0] is None
 
     def test_can_update_core_fields_through_metadata(self, auth_client):
         response = self.create(
-            auth_client, animal="P50", metadata={"pen": 1, "site": 3}
+            auth_client, animal=self.p50, metadata={"pen": 1, "site": 3}
         )
         url = reverse("neurobank:resource", args=[response.data["name"]])
         response = auth_client.patch(
             url,
-            {"metadata": {"animal": "P51", "experimenter": "smm3rc", "site": 4}},
+            {"metadata": {"animal": self.p51, "experimenter": "smm3rc", "site": 4}},
             format="json",
         )
         assert response.status_code == status.HTTP_200_OK
-        resource = Resource.objects.get(name=response.data["name"])
-        assert (resource.animal, resource.experimenter) == ("P51", self.experimenter)
-        assert resource.metadata == {"pen": 1, "site": 4}
+        assert self.stored(response) == (
+            self.p51,
+            self.experimenter,
+            {"pen": 1, "site": 4},
+        )
         # setting a key to None clears it, as for other metadata
         response = auth_client.patch(url, {"metadata": {"animal": None}}, format="json")
         assert response.status_code == status.HTTP_200_OK
-        resource.refresh_from_db()
-        assert resource.animal is None
+        assert self.stored(response)[0] is None
 
     def test_can_update_metadata_when_it_is_null(self, auth_client):
         resource = Resource.objects.create(dtype=self.dtype, created_by=self.user)
         response = auth_client.patch(
             reverse("neurobank:resource", args=[resource.name]),
-            {"metadata": {"pen": 1, "animal": "P50"}},
+            {"metadata": {"pen": 1, "animal": self.p50}},
             format="json",
         )
         assert response.status_code == status.HTTP_200_OK
-        resource.refresh_from_db()
-        assert (resource.metadata, resource.animal) == ({"pen": 1}, "P50")
+        assert self.stored(response) == (self.p50, None, {"pen": 1})
 
     def test_resource_can_be_read_back_and_saved(self, auth_client):
         # a record read from the registry and sent back has the fields in both places
-        response = self.create(auth_client, experimenter="smm3rc", animal="P50")
+        response = self.create(auth_client, experimenter="smm3rc", animal=self.p50)
         url = reverse("neurobank:resource", args=[response.data["name"]])
         record = auth_client.get(url).data
         response = auth_client.put(
@@ -1501,26 +1523,38 @@ class TestCoreFields:
 
     def test_can_filter_by_core_fields(self, client, auth_client, settings):
         settings.NBANK_METADATA_ALIASES = {"bird": "animal"}
-        a = self.create(auth_client, experimenter="smm3rc", animal="P50").data["name"]
-        b = self.create(auth_client, animal="P51").data["name"]
+        a = self.create(auth_client, experimenter="smm3rc", animal=self.p50)
+        b = self.create(auth_client, animal=self.p51)
+        a, b = a.data["name"], b.data["name"]
         url = reverse("neurobank:resource-list")
 
         def names(params):
             response = client.get(url, params)
             assert response.status_code == status.HTTP_200_OK
-            return [r["name"] for r in response.data]
+            return {r["name"] for r in response.data}
 
-        assert names({"experimenter": "smm3rc"}) == [a]
-        assert names({"animal": "P51"}) == [b]
+        assert names({"experimenter": "smm3rc"}) == {a}
+        assert names({"animal": self.p51}) == {b}
         # searches through metadata, as older clients send them, search the fields
-        assert names({"metadata__experimenter": "smm3rc"}) == [a]
-        assert names({"metadata__bird": "P51"}) == [b]
-        assert names({"metadata__animal__neq": "P50"}) == [b]
-        assert set(names({"metadata__animal__startswith": "P5"})) == {a, b}
+        assert names({"metadata__experimenter": "smm3rc"}) == {a}
+        assert names({"metadata__bird": self.p51}) == {b}
+        assert names({"metadata__animal__neq": self.p50}) == {b}
+        assert names({"metadata__animal__startswith": self.p51[:6]}) == {b}
+
+    def test_metadata_searches_on_core_fields_are_not_parsed_as_json(
+        self, client, auth_client, animal
+    ):
+        # "1e5" would otherwise be read as a number
+        a = animal("1e5")
+        name = self.create(auth_client, animal=a).data["name"]
+        url = reverse("neurobank:resource-list")
+        for params in ({"metadata__animal": a}, {"metadata__animal__startswith": a}):
+            response = client.get(url, params)
+            assert [r["name"] for r in response.data] == [name]
 
     def test_can_exclude_and_filter_null_core_fields(self, client, auth_client):
-        a = self.create(auth_client, experimenter="smm3rc", animal="P50").data["name"]
-        b = self.create(auth_client).data["name"]
+        a = self.create(auth_client, experimenter="smm3rc", animal=self.p50)
+        a, b = a.data["name"], self.create(auth_client).data["name"]
         url = reverse("neurobank:resource-list")
 
         def names(params):
@@ -1530,18 +1564,36 @@ class TestCoreFields:
 
         # exclusions keep resources with no value
         assert names({"experimenter__neq": "smm3rc"}) == {b}
-        assert names({"animal__neq": "P50"}) == {b}
+        assert names({"animal__neq": self.p50}) == {b}
         assert names({"experimenter__isnull": "true"}) == {b}
         assert names({"experimenter__isnull": "False"}) == {a}
         assert names({"animal__isnull": "true"}) == {b}
         assert names({"animal__isnull": "false"}) == {a}
 
+    @pytest.mark.parametrize("bad", ["P99", "15db7d088-f7c5-4bed-b77d-77ac55583174"])
+    def test_searching_for_an_animal_that_cant_exist(
+        self, client, auth_client, settings, bad
+    ):
+        settings.NBANK_METADATA_ALIASES = {"bird": "animal"}
+        a = self.create(auth_client, animal=self.p50).data["name"]
+        url = reverse("neurobank:resource-list")
+
+        def names(params):
+            response = client.get(url, params)
+            assert response.status_code == status.HTTP_200_OK
+            return {r["name"] for r in response.data}
+
+        assert names({"animal": bad}) == set()
+        assert names({"animal__neq": bad}) == {a}
+        assert names({"metadata__bird": bad}) == set()
+        assert names({"metadata__bird__neq": bad}) == {a}
+
     def test_bulk_records_include_core_fields(self, client, auth_client):
-        response = self.create(auth_client, experimenter="smm3rc", animal="P50")
+        response = self.create(auth_client, experimenter="smm3rc", animal=self.p50)
         name = response.data["name"]
         response = client.post(
             reverse("neurobank:bulk-resource-list"), {"names": [name]}, format="json"
         )
         [record] = [json.loads(line) for line in response]
-        assert (record["experimenter"], record["animal"]) == ("smm3rc", "P50")
-        assert record["metadata"]["animal"] == "P50"
+        assert (record["experimenter"], record["animal"]) == ("smm3rc", self.p50)
+        assert record["metadata"]["animal"] == self.p50

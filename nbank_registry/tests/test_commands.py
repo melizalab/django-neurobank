@@ -16,7 +16,20 @@ else:
 
 pytestmark = pytest.mark.django_db
 
-UUID = "6d6ba7c4-3ea6-4bfa-a1d0-0f0a76d8bd3b"
+
+@pytest.fixture
+def p50(animal):
+    return animal("P50")
+
+
+@pytest.fixture
+def p51(animal):
+    return animal("P51")
+
+
+def animal_of(res):
+    res.refresh_from_db()
+    return str(res.animal_id) if res.animal_id else None
 
 
 @pytest.fixture
@@ -42,12 +55,11 @@ def promote(tmp_path, mappings=None, *args):
     return out.getvalue(), err.getvalue()
 
 
-def test_valid_values_are_moved(tmp_path, make, user):
-    res = make({"experimenter": "user", "animal": f" {UUID} ", "pen": 1})
+def test_valid_values_are_moved(tmp_path, make, user, p50):
+    res = make({"experimenter": "user", "animal": f" {p50.upper()} ", "pen": 1})
     promote(tmp_path)
-    res.refresh_from_db()
+    assert animal_of(res) == p50
     assert res.experimenter == user
-    assert res.animal == UUID
     assert res.metadata == {"pen": 1}
 
 
@@ -59,47 +71,50 @@ def test_other_keys_are_left_in_metadata(tmp_path, make):
     assert "changed 0" in err
 
 
-def test_invalid_values_are_left_in_metadata(tmp_path, make):
-    metadata = {"experimenter": "nobody", "animal": [1]}
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        {"experimenter": "nobody"},
+        {"animal": "P99"},
+        {"animal": "15db7d088-f7c5-4bed-b77d-77ac55583174"},
+        {"animal": [1]},
+    ],
+)
+def test_invalid_values_are_left_in_metadata(tmp_path, make, metadata):
     res = make(metadata)
     _, err = promote(tmp_path)
-    res.refresh_from_db()
-    assert res.metadata == metadata
-    assert (res.experimenter, res.animal) == (None, None)
+    assert animal_of(res) is None
+    assert (res.experimenter, res.metadata) == (None, metadata)
     assert "unresolved 1" in err
 
 
-def test_dry_run_changes_nothing(tmp_path, make):
-    res = make({"animal": "P50"})
+def test_dry_run_changes_nothing(tmp_path, make, p50):
+    res = make({"animal": p50})
     _, err = promote(tmp_path, None, "--dry-run")
-    res.refresh_from_db()
-    assert res.animal is None
-    assert res.metadata == {"animal": "P50"}
+    assert animal_of(res) is None
+    assert res.metadata == {"animal": p50}
     assert "would change 1" in err
 
 
-def test_aliases_from_mappings_and_settings(tmp_path, make, user, settings):
+def test_aliases_from_mappings_and_settings(tmp_path, make, user, p50, settings):
     settings.NBANK_METADATA_ALIASES = {"bird": "animal"}
-    res = make({"bird": "P50", "experiemtner": "user"})
+    res = make({"bird": p50, "experiemtner": "user"})
     promote(tmp_path, '[aliases]\nexperiemtner = "experimenter"\n')
-    res.refresh_from_db()
-    assert (res.animal, res.experimenter) == ("P50", user)
-    assert res.metadata == {}
+    assert animal_of(res) == p50
+    assert (res.experimenter, res.metadata) == (user, {})
 
 
-def test_values_are_mapped(tmp_path, make, user):
+def test_values_are_mapped(tmp_path, make, user, p50):
     res = make({"experimenter": "bbellanger", "animal": "B2"})
-    promote(tmp_path, f'[experimenter]\nbbellanger = "user"\n[animal]\nB2 = "{UUID}"\n')
-    res.refresh_from_db()
-    assert (res.experimenter, res.animal) == (user, UUID)
-    assert res.metadata == {}
+    promote(tmp_path, f'[experimenter]\nbbellanger = "user"\n[animal]\nB2 = "{p50}"\n')
+    assert animal_of(res) == p50
+    assert (res.experimenter, res.metadata) == (user, {})
 
 
 def test_move_leaves_field_empty_and_renames_key(tmp_path, make):
     res = make({"animal": "synthetic"})
     promote(tmp_path, '[animal]\nsynthetic = { move = "source" }\n')
-    res.refresh_from_db()
-    assert res.animal is None
+    assert animal_of(res) is None
     assert res.metadata == {"source": "synthetic"}
 
 
@@ -127,50 +142,46 @@ def test_dry_run_creates_no_users(tmp_path, make):
     assert "would change 1" in err
 
 
-def test_keys_that_disagree_are_a_conflict(tmp_path, make, user, settings):
+def test_keys_that_disagree_are_a_conflict(tmp_path, make, user, p50, p51, settings):
     settings.NBANK_METADATA_ALIASES = {"bird": "animal"}
-    res = make({"bird": "P50", "animal": "P51", "experimenter": "user"})
+    res = make({"bird": p50, "animal": p51, "experimenter": "user"})
     _, err = promote(tmp_path)
-    res.refresh_from_db()
+    assert animal_of(res) is None
     # the other fields are still moved
     assert res.experimenter == user
-    assert res.metadata == {"bird": "P50", "animal": "P51"}
+    assert res.metadata == {"bird": p50, "animal": p51}
     assert f"conflict in {res.name}: animal" in err
 
 
-def test_keys_that_map_to_the_same_value_agree(tmp_path, make, settings):
+def test_keys_that_map_to_the_same_value_agree(tmp_path, make, p50, settings):
     settings.NBANK_METADATA_ALIASES = {"bird": "animal"}
-    res = make({"bird": "B2", "animal": UUID})
-    promote(tmp_path, f'[animal]\nB2 = "{UUID}"\n')
-    res.refresh_from_db()
-    assert res.animal == UUID
+    res = make({"bird": "B2", "animal": p50})
+    promote(tmp_path, f'[animal]\nB2 = "{p50}"\n')
+    assert animal_of(res) == p50
     assert res.metadata == {}
 
 
-def test_field_already_set_to_another_value_is_a_conflict(tmp_path, make):
-    res = make({"animal": "P50"}, animal="P51")
+def test_field_already_set_to_another_value_is_a_conflict(tmp_path, make, p50, p51):
+    res = make({"animal": p50}, animal_id=p51)
     _, err = promote(tmp_path)
-    res.refresh_from_db()
-    assert res.animal == "P51"
-    assert res.metadata == {"animal": "P50"}
-    assert "already 'P51'" in err
+    assert animal_of(res) == p51
+    assert res.metadata == {"animal": p50}
+    assert f"already '{p51}'" in err
 
 
 def test_blank_values_are_removed(tmp_path, make):
     res = make({"animal": " ", "pen": 1})
     promote(tmp_path)
-    res.refresh_from_db()
-    assert res.animal is None
+    assert animal_of(res) is None
     assert res.metadata == {"pen": 1}
 
 
-def test_runs_in_batches(tmp_path, make):
-    resources = [make({"animal": f"P{i}"}) for i in range(5)]
+def test_runs_in_batches(tmp_path, make, animal):
+    animals = [animal(f"P{i}") for i in range(5)]
+    resources = [make({"animal": a}) for a in animals]
     _, err = promote(tmp_path, None, "--batch-size", "2")
     assert "changed 5" in err
-    assert [Resource.objects.get(pk=r.pk).animal for r in resources] == [
-        f"P{i}" for i in range(5)
-    ]
+    assert [animal_of(r) for r in resources] == animals
 
 
 @pytest.mark.parametrize(
@@ -183,6 +194,7 @@ def test_runs_in_batches(tmp_path, make):
         '[aliases]\nanimal = "experimenter"\n',
         '[users]\ncreate = ["not a name"]\n',
         '[experimenter]\nbbellanger = "nobody"\n',
+        '[animal]\nB2 = "P99"\n',
         '[animal]\nB2 = ""\n',
         '[animal]\nsynthetic = { move = "animal" }\n',
         '[animal]\nsynthetic = { rename = "source" }\n',
@@ -197,10 +209,10 @@ def test_bad_mappings_are_refused(tmp_path, make, mappings):
     assert res.metadata == {"animal": "P50"}
 
 
-def test_template(tmp_path, make, settings):
+def test_template(tmp_path, make, p50, settings):
     settings.NBANK_METADATA_ALIASES = {"bird": "animal"}
     make({"experimenter": "bple", "bird": "B2"})
-    make({"experimenter": "user", "bird": UUID, "animal": "x" * 129})
+    make({"experimenter": "user", "bird": p50})
     make({"experimenter": "bple", "bird": "synthetic"})
     out, _ = promote(
         tmp_path,
@@ -220,20 +232,23 @@ def test_template(tmp_path, make, settings):
     assert '    # "bple",  # 2 resources' in lines
     assert '# "bird" = "animal"  # from NBANK_METADATA_ALIASES' in lines
     assert '"synthetic" = { move = "source" }  # 1 resources' in lines
-    assert f'# "{"x" * 129}" = ""  # 1 resources: longer than 128 characters' in lines
+    assert '# "B2" = ""  # 1 resources: no such animal' in lines
     # values that can't be stored come first
     assert lines.index('# "bple" = ""  # 2 resources: no such user') < lines.index(
         '# "user" = ""  # 1 resources'
     )
+    assert lines.index('# "B2" = ""  # 1 resources: no such animal') < lines.index(
+        f'# "{p50}" = ""  # 1 resources'
+    )
 
 
-def test_template_round_trips(tmp_path, make, user):
+def test_template_round_trips(tmp_path, make, p50):
     make({"experimenter": "bple", "animal": "B2"})
     out, _ = promote(tmp_path, None, "--dry-run")
     filled = out.replace('    # "bple",', '    "bple",').replace(
-        '# "B2" = ""', f'"B2" = "{UUID}"'
+        '# "B2" = ""', f'"B2" = "{p50}"'
     )
     out, err = promote(tmp_path, filled, "--dry-run")
     assert "would change 1" in err
     assert tomllib.loads(out)["users"] == {"create": ["bple"]}
-    assert tomllib.loads(out)["animal"] == {"B2": UUID}
+    assert tomllib.loads(out)["animal"] == {"B2": p50}

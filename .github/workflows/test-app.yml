@@ -53,3 +53,8 @@ jobs:
       env:
         NBANK_TEST_DB: postgres
       run: uv run pytest
+    - name: Run tests with animals keyed by UUID
+      env:
+        NBANK_TEST_DB: postgres
+        NBANK_TEST_ANIMAL_MODEL: uuid
+      run: uv run pytest

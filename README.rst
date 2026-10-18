@@ -85,15 +85,26 @@ Documentation is still in progress. We need a list of endpoints and
 supported verbs. However, the interface can be accessed through a
 browser.
 
-Besides free-form ``metadata``, each resource has two optional fields with a
-fixed form, which can be searched exactly (``?experimenter=``, ``?animal=``),
-excluded (``?animal__neq=``), or tested for a missing value
+Besides free-form ``metadata``, each resource has two optional fields that
+refer to other records, which can be searched exactly (``?experimenter=``,
+``?animal=``), excluded (``?animal__neq=``), or tested for a missing value
 (``?animal__isnull=true``):
 
 - ``experimenter``: the username of the person who collected or produced the
   data. It must be a user in the registry; people who don't use the registry
   (e.g. external collaborators) can be given inactive accounts.
-- ``animal``: an identifier for the animal the data came from, stored as given.
+- ``animal``: the animal the data came from, by the primary key of the animal
+  model. It must be a record in that model; animals from elsewhere can be given
+  placeholder records. Leave it empty for synthetic data or data from more than
+  one animal.
+
+By default, animals are kept in a minimal model of the registry's own, keyed by
+name and managed in the admin. A site with its own animal database in the same
+Django project can use that instead, e.g. ``NBANK_ANIMAL_MODEL =
+"birds.Animal"`` for `django-bird-colony
+<https://github.com/melizalab/django-bird-colony>`__, where animals are keyed by
+UUID. Like ``AUTH_USER_MODEL``, this must be set before the registry's
+migrations are first run.
 
 Clients written for API version 1.1 and earlier set and read these as
 metadata keys. The registry moves those keys out of ``metadata`` into the
@@ -105,10 +116,13 @@ other keys to treat the same way with a setting, e.g.
 To move values already in metadata into the fields, run ``python manage.py
 promote_metadata --dry-run > mappings.toml``. This reports what would change
 and writes a template listing every value found, with values that can't be
-stored (such as an experimenter who isn't a user) first.
+stored (an experimenter who isn't a user, or an animal that isn't in the animal
+model) first.
 Edit it to add aliases, inactive users to create, and value mappings (``"old" =
 "new"``, or ``"old" = { move = "key" }`` to keep a value in metadata under
-another key and leave the field empty), then repeat the dry run with
+another key and leave the field empty). The command doesn't create animals; add
+placeholder records for the ones that aren't in the animal model. Then repeat
+the dry run with
 ``--mappings mappings.toml`` until the report looks right, and run it without
 ``--dry-run``. Values that can't be stored, and resources whose values conflict,
 are left in metadata. The command can be run again.

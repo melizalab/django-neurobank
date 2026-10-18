@@ -2,10 +2,40 @@
 
 from pathlib import Path
 
+from django.apps import apps
+from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from nbank_registry.tools import random_id
+
+# the model for animals, which a site can replace with its own (set before the
+# first migration, like AUTH_USER_MODEL). Resources refer to animals by primary key.
+# Django expects the setting of a swappable model to exist, so it gets a default.
+if not hasattr(settings, "NBANK_ANIMAL_MODEL"):
+    settings.NBANK_ANIMAL_MODEL = "nbank_registry.Animal"
+ANIMAL_MODEL = settings.NBANK_ANIMAL_MODEL
+
+
+def get_animal_model():
+    """Returns the model class for animals"""
+    return apps.get_model(ANIMAL_MODEL, require_ready=False)
+
+
+class Animal(models.Model):
+    """An animal that resources come from, identified by name.
+
+    Sites with their own animal database set NBANK_ANIMAL_MODEL instead.
+    """
+
+    name = models.CharField(max_length=128, primary_key=True)
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        swappable = "NBANK_ANIMAL_MODEL"
+        ordering = ["name"]
 
 
 class Resource(models.Model):
@@ -35,12 +65,13 @@ class Resource(models.Model):
         null=True,
         help_text="the person who collected or produced the data",
     )
-    animal = models.CharField(
-        max_length=128,
+    animal = models.ForeignKey(
+        ANIMAL_MODEL,
+        related_name="nbank_resources",
+        on_delete=models.PROTECT,
         blank=True,
         null=True,
-        db_index=True,
-        help_text="identifier of the animal the data came from (null if synthetic or from more than one animal)",
+        help_text="the animal the data came from (null if synthetic or from more than one animal)",
     )
 
     def __str__(self):

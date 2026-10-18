@@ -29,7 +29,13 @@ INSTALLED_APPS = [
     "rest_framework",
     "django_filters",
     "nbank_registry",
+    "nbank_registry.tests.animals",
 ]
+
+# NBANK_TEST_ANIMAL_MODEL=uuid runs the tests with animals keyed by UUID, as with
+# django-bird-colony
+if os.environ.get("NBANK_TEST_ANIMAL_MODEL") == "uuid":
+    NBANK_ANIMAL_MODEL = "animals.Animal"
 
 SECRET_KEY = "django-insecure-test-key-not-for-production"
 

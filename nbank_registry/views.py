@@ -4,6 +4,7 @@ import itertools
 import json
 from urllib.parse import urlparse
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Q
 from django.db.utils import IntegrityError
 from django.http import StreamingHttpResponse
@@ -100,6 +101,15 @@ class LocationFilter(filters.FilterSet):
         fields = ["archive", "scheme"]
 
 
+def animal_pk(value):
+    """Returns value as a primary key of the animal model, or None if it can't be one
+    (such as a malformed UUID)."""
+    try:
+        return models.get_animal_model()._meta.pk.to_python(value)
+    except DjangoValidationError:
+        return None
+
+
 class ResourceFilter(filters.FilterSet):
     # TODO: consider changing some of these to exact by default
     name = filters.CharFilter(field_name="name", lookup_expr="icontains")
@@ -122,12 +132,12 @@ class ResourceFilter(filters.FilterSet):
         field_name="locations__scheme", lookup_expr="istartswith", distinct=True
     )
     experimenter = filters.CharFilter(field_name="experimenter__username")
-    animal = filters.CharFilter(field_name="animal")
+    animal = filters.CharFilter(method="filter_animal")
     # exclusions keep resources with no value for the field
     experimenter__neq = filters.CharFilter(
         field_name="experimenter__username", exclude=True
     )
-    animal__neq = filters.CharFilter(field_name="animal", exclude=True)
+    animal__neq = filters.CharFilter(method="exclude_animal")
     experimenter__isnull = filters.BooleanFilter(
         field_name="experimenter", lookup_expr="isnull"
     )
@@ -135,6 +145,14 @@ class ResourceFilter(filters.FilterSet):
 
     def filter_sha1(self, queryset, name, value):
         return queryset.filter(sha1=value.lower())
+
+    def filter_animal(self, queryset, name, value):
+        pk = animal_pk(value)
+        return queryset.none() if pk is None else queryset.filter(animal=pk)
+
+    def exclude_animal(self, queryset, name, value):
+        pk = animal_pk(value)
+        return queryset if pk is None else queryset.exclude(animal=pk)
 
     class Meta:
         model = models.Resource
@@ -145,7 +163,7 @@ class ResourceFilter(filters.FilterSet):
 
 # how metadata searches on the core fields map onto the fields
 CORE_FIELD_LOOKUPS = {
-    "animal": "animal",
+    "animal": "animal__pk",
     "experimenter": "experimenter__username",
 }
 
@@ -193,6 +211,8 @@ class ResourceList(generics.ListCreateAPIView):
                 exclude = k.endswith("__neq")
                 if exclude:
                     k = k[:-5]
+                key, _, lookup = k.removeprefix("metadata__").partition("__")
+                field = core_keys.get(key)
                 if k.endswith("__isnull"):
                     try:
                         v = ISNULL_VALUES[v.lower()]
@@ -200,16 +220,22 @@ class ResourceList(generics.ListCreateAPIView):
                         raise ValidationError(
                             {param: ["must be true or false"]}
                         ) from None
-                else:
-                    # try to parse the value as json, which will convert numeric values
+                elif field is None:
+                    # try to parse the value as json, which will convert numeric
+                    # values; the core fields are strings
                     try:
                         v = json.loads(v)
                     except json.decoder.JSONDecodeError:
                         pass
-                key, _, lookup = k.removeprefix("metadata__").partition("__")
-                field = core_keys.get(key)
                 if field is not None:
                     k = "__".join(filter(None, (CORE_FIELD_LOOKUPS[field], lookup)))
+                    if field == "animal" and lookup in ("", "exact"):
+                        v = animal_pk(v)
+                        if v is None:
+                            # no resource can have this animal
+                            if exclude:
+                                continue
+                            return qs.none()
                 (me if exclude else mf)[k] = v
         return qs.exclude(**me).filter(**mf).order_by("name")
 

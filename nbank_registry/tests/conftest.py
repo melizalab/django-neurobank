@@ -30,3 +30,18 @@ def user(db):
 def auth_client(client, user):
     client.login(username=USERNAME, password=PASSWORD)
     return client
+
+
+@pytest.fixture
+def animal(db):
+    """Returns a function that creates an animal and returns its identifier.
+
+    The identifier is the name with the default animal model, and a UUID with
+    NBANK_TEST_ANIMAL_MODEL=uuid.
+    """
+    from nbank_registry.models import get_animal_model
+
+    def make(name: str) -> str:
+        return str(get_animal_model().objects.create(name=name).pk)
+
+    return make

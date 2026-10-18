@@ -16,7 +16,7 @@ from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from nbank_registry.models import Resource
+from nbank_registry.models import Resource, get_animal_model
 from nbank_registry.serializers import CORE_FIELDS, metadata_keys
 
 TEMPLATE_HEADER = """\
@@ -31,14 +31,12 @@ TEMPLATE_HEADER = """\
 """
 
 
-def check_value(field: str, value: str, users: set[str]) -> str | None:
-    """Returns why value can't be stored in field, or None if it can."""
-    if field == "experimenter":
-        return None if value in users else "no such user"
-    max_length = Resource._meta.get_field(field).max_length
-    if len(value) > max_length:
-        return f"longer than {max_length} characters"
-    return None
+def animal_pk(value: str):
+    """Returns value as a primary key of the animal model, or None if it can't be one."""
+    try:
+        return get_animal_model()._meta.pk.to_python(value)
+    except ValidationError:
+        return None
 
 
 def normalize(value) -> str | None:
@@ -54,9 +52,10 @@ def toml_str(value: str) -> str:
 
 
 class Mappings:
-    """The contents of a mappings file, checked against the registry's users."""
+    """The contents of a mappings file, checked against the registry's users and
+    animals (as strings of their primary keys)."""
 
-    def __init__(self, data: dict, users: set[str]):
+    def __init__(self, data: dict, users: set[str], animals: set[str]):
         unknown = set(data) - {"aliases", "users", *CORE_FIELDS}
         if unknown:
             raise CommandError(f"unknown tables in mappings: {sorted(unknown)}")
@@ -73,6 +72,7 @@ class Mappings:
             if not isinstance(name, str) or not is_username(name):
                 raise CommandError(f"users.create: '{name}' is not a valid username")
         self.users = users | set(self.create)
+        self.animals = animals
 
         self.values = {field: dict(data.get(field, {})) for field in CORE_FIELDS}
         for field, mapping in self.values.items():
@@ -89,8 +89,19 @@ class Mappings:
                         )
                 elif not isinstance(new, str) or not new:
                     raise CommandError(f"{field}: '{old}': expected a value or a table")
-                elif reason := check_value(field, new, self.users):
+                elif reason := self.check(field, new)[1]:
                     raise CommandError(f"{field}: '{old}' = '{new}': {reason}")
+
+    def check(self, field: str, value: str) -> tuple[str | None, str | None]:
+        """Returns (value as stored, None) if value can be stored in field, or
+        (None, why not)."""
+        if field == "experimenter":
+            return (value, None) if value in self.users else (None, "no such user")
+        # animals are compared by primary key, so a UUID in capitals still matches
+        pk = animal_pk(value)
+        if pk is None or str(pk) not in self.animals:
+            return None, "no such animal"
+        return str(pk), None
 
     def resolve(self, field: str, raw) -> tuple[str, tuple | None, str | None]:
         """Returns (label, result, reason) for a metadata value of a field.
@@ -107,8 +118,8 @@ class Mappings:
         new = self.values[field].get(value, value)
         if isinstance(new, dict):
             return value, ("move", new["move"], value), None
-        reason = check_value(field, new, self.users)
-        return value, (None if reason else ("set", new)), reason
+        stored, reason = self.check(field, new)
+        return value, (None if reason else ("set", stored)), reason
 
 
 class Command(BaseCommand):
@@ -140,7 +151,10 @@ class Command(BaseCommand):
             except (OSError, tomllib.TOMLDecodeError) as err:
                 raise CommandError(f"can't read mappings: {err}") from err
         users = set(User.objects.values_list("username", flat=True))
-        self.mappings = Mappings(data, users)
+        animals = {
+            str(pk) for pk in get_animal_model().objects.values_list("pk", flat=True)
+        }
+        self.mappings = Mappings(data, users, animals)
         if not dry_run:
             for name in self.mappings.create:
                 if name not in users:
@@ -214,11 +228,14 @@ class Command(BaseCommand):
             kind, *args = distinct.pop()
             if kind == "set":
                 (value,) = args
-                current = (
-                    resource.experimenter.username
-                    if field == "experimenter" and resource.experimenter_id
-                    else getattr(resource, field)
-                )
+                if field == "experimenter":
+                    current = (
+                        resource.experimenter.username
+                        if resource.experimenter_id
+                        else None
+                    )
+                else:
+                    current = str(resource.animal_id) if resource.animal_id else None
                 if current not in (None, value):
                     self.conflict(resource, field, f"the field is already '{current}'")
                     continue
@@ -226,7 +243,7 @@ class Command(BaseCommand):
                     # a user to be created has no id in a dry run
                     resource.experimenter_id = self.user_ids.get(value)
                 else:
-                    setattr(resource, field, value)
+                    resource.animal_id = animal_pk(value)
             elif kind == "move":
                 key, value = args
                 if metadata.get(key, value) != value:

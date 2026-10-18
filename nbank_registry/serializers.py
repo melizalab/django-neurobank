@@ -6,11 +6,17 @@ import re
 
 from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from rest_framework import serializers
 from rest_framework.validators import UniqueTogetherValidator, UniqueValidator
 
-from nbank_registry.models import Archive, DataType, Location, Resource
+from nbank_registry.models import (
+    Archive,
+    DataType,
+    Location,
+    Resource,
+    get_animal_model,
+)
 
 sha1_re = re.compile(r"[0-9a-fA-F]{40}")
 
@@ -73,6 +79,25 @@ def unique_name_kwargs(model, message):
     }
 
 
+class AnimalField(serializers.PrimaryKeyRelatedField):
+    """An animal, by the primary key of the animal model, as a string."""
+
+    default_error_messages = {
+        "does_not_exist": "no such animal '{pk_value}'",
+        "incorrect_type": "invalid animal identifier",
+    }
+
+    def to_internal_value(self, data):
+        try:
+            return super().to_internal_value(data)
+        except ValidationError:
+            # a value the primary key can't hold, such as a malformed UUID
+            self.fail("does_not_exist", pk_value=data)
+
+    def to_representation(self, value):
+        return str(super().to_representation(value))
+
+
 class AccessibilityField(serializers.Field):
     def to_representation(self, value):
         return Archive.Accessibility(value).label
@@ -114,6 +139,9 @@ class ResourceSerializer(serializers.ModelSerializer):
             "invalid": "invalid username",
         },
     )
+    animal = AnimalField(
+        queryset=get_animal_model().objects.all(), required=False, allow_null=True
+    )
     metadata = serializers.JSONField(required=False)
 
     def to_internal_value(self, data):
@@ -141,9 +169,6 @@ class ResourceSerializer(serializers.ModelSerializer):
         if copies:
             data["metadata"] = {**(data.get("metadata") or {}), **copies}
         return data
-
-    def validate_animal(self, value):
-        return value or None
 
     def validate_sha1(self, value):
         """If updating, check if user has permission. Check if valid sha1"""
