@@ -45,7 +45,7 @@ COPYING for details.
 Quick start
 ~~~~~~~~~~~
 
-1. Requires Python 3.10+. Runs on Django 4.2 LTS and 5.1.
+1. Requires Python 3.11+. Runs on Django 5.2 LTS through 6.1.
 
 2. Install the package: ``pip install django-neurobank``
 

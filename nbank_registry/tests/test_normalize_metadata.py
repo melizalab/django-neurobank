@@ -1,5 +1,5 @@
 # -*- mode: python -*-
-import sys
+import tomllib
 from io import StringIO
 
 import pytest
@@ -8,11 +8,6 @@ from django.core.management import call_command
 from django.core.management.base import CommandError
 
 from nbank_registry.models import ANIMAL_MODEL, DataType, Resource
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
 
 pytestmark = pytest.mark.django_db
 

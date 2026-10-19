@@ -4,14 +4,9 @@ and renames keys and maps values of other metadata."""
 
 import json
 import re
-import sys
+import tomllib
 from collections import Counter, defaultdict
 from pathlib import Path
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
 
 from django.contrib.auth.models import User
 from django.core.exceptions import ValidationError

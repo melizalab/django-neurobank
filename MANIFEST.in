@@ -1,4 +1,4 @@
-include README.md
+include README.rst
 include COPYING
 recursive-include nbank_registry/migrations *.py
 recursive-include docs *
