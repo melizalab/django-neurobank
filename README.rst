@@ -135,6 +135,13 @@ mappings.toml`` until the report looks right, and then run it without
 ``--dry-run``. Values that can't be stored in a field, and resources whose
 values conflict, are left as they are. The command can be run again.
 
+When a resource is created (or updated), ``locations`` lists the archives that
+hold it, by name. An entry can also be ``{"archive": name, "key": key}`` to
+record where the resource is within the archive, such as the name of the stored
+file; a key can be used only once in an archive. Records list locations by
+archive name. A location's key can be changed later through the resource's
+locations.
+
 Deleting is not supported in the HTTP API. A fundamental concept behind
 a registry is that resources have unique identifiers, which are never
 re-used or changed. You can edit locations, metadata, and other

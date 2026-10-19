@@ -1615,3 +1615,81 @@ class TestCoreFields:
         [record] = [json.loads(line) for line in response]
         assert (record["experimenter"], record["animal"]) == ("smm3rc", self.p50)
         assert record["metadata"]["animal"] == self.p50
+
+
+class TestResourceLocationKeys:
+    @pytest.fixture(autouse=True)
+    def setup(self, user):
+        self.dtype = DataType.objects.create(name="ext-arf", content_type="x")
+        self.archive = Archive.objects.create(
+            name="local", scheme="neurobank", root="/home/data/archive"
+        )
+        self.other = Archive.objects.create(
+            name="remote", scheme="http", root="/meliza.org/data"
+        )
+
+    def create(self, auth_client, locations, **fields):
+        return auth_client.post(
+            reverse("neurobank:resource-list"),
+            {"dtype": self.dtype.name, "locations": locations, **fields},
+            format="json",
+        )
+
+    def keys(self, name):
+        return {
+            loc.archive.name: loc.key
+            for loc in Location.objects.filter(resource__name=name)
+        }
+
+    def test_can_create_resource_with_location_key(self, auth_client):
+        response = self.create(
+            auth_client, [{"archive": "local", "key": "res_1.wav"}, "remote"]
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        name = response.data["name"]
+        assert self.keys(name) == {"local": "res_1.wav", "remote": None}
+        # records still list archive names
+        assert sorted(response.data["locations"]) == ["local", "remote"]
+
+    def test_location_key_can_be_null(self, auth_client):
+        response = self.create(auth_client, [{"archive": "local", "key": None}])
+        assert response.status_code == status.HTTP_201_CREATED
+        assert self.keys(response.data["name"]) == {"local": None}
+
+    @pytest.mark.parametrize(
+        "locations, message",
+        [
+            ([{"archive": "nowhere", "key": "x"}], "no such archive 'nowhere'"),
+            (["nowhere"], "no such archive 'nowhere'"),
+            ([{"key": "x"}], "invalid location"),
+            ([{"archive": "local", "key": "x", "extra": 1}], "invalid location"),
+            ([{"archive": "local", "key": 5}], "invalid location"),
+            ([5], "invalid location"),
+            (["local", {"archive": "local", "key": "x"}], "more than once"),
+        ],
+    )
+    def test_bad_locations_are_refused(self, auth_client, locations, message):
+        response = self.create(auth_client, locations)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert message in str(response.data["locations"])
+        assert Resource.objects.count() == 0
+
+    def test_key_already_used_in_the_archive_is_refused(self, auth_client):
+        self.create(auth_client, [{"archive": "local", "key": "res_1.wav"}])
+        response = self.create(auth_client, [{"archive": "local", "key": "res_1.wav"}])
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "already used in archive 'local'" in str(response.data["locations"])
+        assert Resource.objects.count() == 1
+        # the same key in another archive is fine
+        response = self.create(auth_client, [{"archive": "remote", "key": "res_1.wav"}])
+        assert response.status_code == status.HTTP_201_CREATED
+
+    def test_can_add_locations_by_updating_the_resource(self, auth_client):
+        name = self.create(auth_client, ["remote"]).data["name"]
+        response = auth_client.patch(
+            reverse("neurobank:resource", args=[name]),
+            {"locations": ["remote", {"archive": "local", "key": "res_1.wav"}]},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert self.keys(name) == {"local": "res_1.wav", "remote": None}

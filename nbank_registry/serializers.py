@@ -98,6 +98,56 @@ class AnimalField(serializers.PrimaryKeyRelatedField):
         return str(super().to_representation(value))
 
 
+class LocationField(serializers.Field):
+    """A location given as an archive name, or as {"archive": name, "key": key} to
+    record where the resource is in the archive. Shown as the archive name."""
+
+    default_error_messages = {
+        "invalid": 'invalid location: give an archive name or {{"archive", "key"}}',
+        "does_not_exist": "no such archive '{value}'",
+    }
+
+    def to_internal_value(self, data) -> tuple[Archive, str | None]:
+        if isinstance(data, str):
+            name, key = data, None
+        elif (
+            isinstance(data, dict)
+            and "archive" in data
+            and set(data) <= {"archive", "key"}
+            and isinstance(data["archive"], str)
+            and isinstance(data.get("key"), (str, type(None)))
+        ):
+            name, key = data["archive"], data.get("key")
+        else:
+            self.fail("invalid")
+        try:
+            return Archive.objects.get(name=name), key
+        except Archive.DoesNotExist:
+            self.fail("does_not_exist", value=name)
+
+    def to_representation(self, value):
+        return value.name
+
+
+class LocationsField(serializers.ListField):
+    child = LocationField()
+
+    def get_attribute(self, instance):
+        return instance.locations.all()
+
+    def to_internal_value(self, data):
+        locations = super().to_internal_value(data)
+        archives = [archive for archive, _ in locations]
+        if len(set(archives)) < len(archives):
+            raise serializers.ValidationError("an archive is given more than once")
+        for archive, key in locations:
+            if key and Location.objects.filter(archive=archive, key=key).exists():
+                raise serializers.ValidationError(
+                    f"key '{key}' is already used in archive '{archive.name}'"
+                )
+        return locations
+
+
 class AccessibilityField(serializers.Field):
     def to_representation(self, value):
         return Archive.Accessibility(value).label
@@ -118,16 +168,7 @@ class ResourceSerializer(serializers.ModelSerializer):
             "invalid": "invalid dtype name",
         },
     )
-    locations = serializers.SlugRelatedField(
-        queryset=Archive.objects.all(),
-        required=False,
-        many=True,
-        slug_field="name",
-        error_messages={
-            "does_not_exist": "no such archive '{value}'",
-            "invalid": "invalid archive name",
-        },
-    )
+    locations = LocationsField(required=False)
     created_by = serializers.ReadOnlyField(source="created_by.username")
     experimenter = serializers.SlugRelatedField(
         queryset=User.objects.all(),
@@ -209,10 +250,10 @@ class ResourceSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        archives = validated_data.pop("locations", [])
+        locations = validated_data.pop("locations", [])
         resource = Resource.objects.create(**validated_data)
-        for archive in archives:
-            Location.objects.create(resource=resource, archive=archive)
+        for archive, key in locations:
+            Location.objects.create(resource=resource, archive=archive, key=key)
         return resource
 
     def update(self, instance, validated_data):
@@ -221,10 +262,10 @@ class ResourceSerializer(serializers.ModelSerializer):
         For the metadata field, any sub-fields not in the supplied data are
         retained. To delete a subfield, set it to None
         """
-        archives = validated_data.pop("locations", [])
-        for archive in archives:
-            if archive not in instance.locations:
-                Location.objects.create(resource=instance, archive=archive)
+        existing = set(instance.locations.all())
+        for archive, key in validated_data.pop("locations", []):
+            if archive not in existing:
+                Location.objects.create(resource=instance, archive=archive, key=key)
         instance.dtype = validated_data.get("dtype", instance.dtype)
         instance.sha1 = validated_data.get("sha1", instance.sha1)
         for field in CORE_FIELDS:
