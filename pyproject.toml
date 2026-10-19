@@ -48,6 +48,7 @@ dev = [
     "pytest-cov>=5.0.0",
     "pytest>=8.3.3,<10",
     "pytest-django>=4.9.0",
+    "django-stubs>=5.2",
     "ruff>=0.7.0",
 ]
 postgres = [
@@ -88,3 +89,6 @@ ignore = ["E221", "E501", "E701"]
 include = ["nbank_registry/**"]
 exclude = ["*test*"]
 artifacts = ["README.rst"]
+
+[tool.ty.environment]
+python = ".venv"
