@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "django-neurobank"
-version = "0.11.0"
+version = "0.12.0"
 description = "A Django-based registry for the neurobank system"
 readme = "README.rst"
 requires-python = ">=3.11"
@@ -43,6 +43,7 @@ dependencies = [
 
 [project.urls]
 Homepage = "https://github.com/melizalab/django-neurobank"
+Changelog = "https://github.com/melizalab/django-neurobank/blob/master/CHANGELOG.rst"
 
 [dependency-groups]
 dev = [
@@ -95,6 +96,9 @@ ignore = ["E221", "E501", "E701", "RUF012"]
 include = ["nbank_registry/**"]
 exclude = ["*test*"]
 artifacts = ["README.rst"]
+
+[tool.hatch.build.targets.sdist]
+include = ["nbank_registry/**", "CHANGELOG.rst"]
 
 [tool.ty.environment]
 python = ".venv"
