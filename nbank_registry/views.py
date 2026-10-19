@@ -142,6 +142,10 @@ class ResourceFilter(filters.FilterSet):
         field_name="experimenter", lookup_expr="isnull"
     )
     animal__isnull = filters.BooleanFilter(field_name="animal", lookup_expr="isnull")
+    # e.g. the first part of a UUID, as people type it
+    animal__istartswith = filters.CharFilter(
+        field_name="animal__pk", lookup_expr="istartswith"
+    )
 
     def filter_sha1(self, queryset, name, value):
         return queryset.filter(sha1=value.lower())
@@ -177,7 +181,7 @@ class ResourceList(generics.ListCreateAPIView):
 
     Results can be filtered using query params on name, dtype, location, sha1,
     experimenter, animal, etc (see OPTIONS). The last two also take `__neq` and
-    `__isnull`.
+    `__isnull`, and animal takes `__istartswith`.
 
     Results can be flexibly filtered on metadata by prefixing the query parameter
     with `metadata__`. Use django suffixes for other kinds of matches and

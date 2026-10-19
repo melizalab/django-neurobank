@@ -88,7 +88,8 @@ browser.
 Besides free-form ``metadata``, each resource has two optional fields that
 refer to other records, which can be searched exactly (``?experimenter=``,
 ``?animal=``), excluded (``?animal__neq=``), or tested for a missing value
-(``?animal__isnull=true``):
+(``?animal__isnull=true``). Animals can also be matched by the start of their
+identifier, such as the first part of a UUID (``?animal__istartswith=``):
 
 - ``experimenter``: the username of the person who collected or produced the
   data. It must be a user in the registry; people who don't use the registry

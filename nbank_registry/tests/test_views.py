@@ -1552,6 +1552,24 @@ class TestCoreFields:
             response = client.get(url, params)
             assert [r["name"] for r in response.data] == [name]
 
+    def test_can_filter_animals_by_prefix(self, client, auth_client, animal):
+        a = self.create(auth_client, animal=self.p50).data["name"]
+        b = self.create(auth_client, animal=self.p51).data["name"]
+        c = self.create(auth_client, animal=animal("Q50")).data["name"]
+        url = reverse("neurobank:resource-list")
+
+        def names(params):
+            response = client.get(url, params)
+            assert response.status_code == status.HTTP_200_OK
+            return {r["name"] for r in response.data}
+
+        # case doesn't matter; a full identifier matches itself
+        assert names({"animal__istartswith": self.p50[:6].upper()}) == {a}
+        assert names({"animal__istartswith": self.p50}) == {a}
+        assert names({"animal__istartswith": "no-such-prefix"}) == set()
+        assert c not in names({"animal__istartswith": self.p51[:6]})
+        assert b in names({"animal__istartswith": self.p51[:6]})
+
     def test_can_exclude_and_filter_null_core_fields(self, client, auth_client):
         a = self.create(auth_client, experimenter="smm3rc", animal=self.p50)
         a, b = a.data["name"], self.create(auth_client).data["name"]
