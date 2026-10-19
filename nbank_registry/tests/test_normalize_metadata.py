@@ -7,7 +7,7 @@ from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.core.management.base import CommandError
 
-from nbank_registry.models import DataType, Resource
+from nbank_registry.models import ANIMAL_MODEL, DataType, Resource
 
 if sys.version_info >= (3, 11):
     import tomllib
@@ -238,14 +238,13 @@ def test_template(tmp_path, make, p50, settings):
     assert '    # "bple",  # 2 resources' in lines
     assert '# "bird" = "animal"  # from NBANK_METADATA_ALIASES' in lines
     assert '"synthetic" = { move = "source" }  # 1 resources' in lines
-    assert '# "B2" = ""  # 1 resources: no such animal' in lines
+    no_animal = f'# "B2" = ""  # 1 resources: no such animal in {ANIMAL_MODEL}'
+    assert no_animal in lines
     # values that can't be stored come first
     assert lines.index('# "bple" = ""  # 2 resources: no such user') < lines.index(
         '# "user" = ""  # 1 resources'
     )
-    assert lines.index('# "B2" = ""  # 1 resources: no such animal') < lines.index(
-        f'# "{p50}" = ""  # 1 resources'
-    )
+    assert lines.index(no_animal) < lines.index(f'# "{p50}" = ""  # 1 resources')
 
 
 def test_template_round_trips(tmp_path, make, p50):
@@ -360,3 +359,9 @@ def test_metadata_move_onto_a_different_value_is_a_conflict(tmp_path, make):
     res.refresh_from_db()
     assert res.metadata == metadata
     assert f"conflict in {res.name}: metadata.protocol" in err
+
+
+def test_unknown_animal_in_mappings_names_the_model(tmp_path, make):
+    make({"animal": "B2"})
+    with pytest.raises(CommandError, match=f"no such animal in {ANIMAL_MODEL}"):
+        normalize(tmp_path, '[animal]\nB2 = "P99"\n')

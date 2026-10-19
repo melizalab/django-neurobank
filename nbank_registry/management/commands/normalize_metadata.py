@@ -18,7 +18,7 @@ from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from nbank_registry.models import Resource, get_animal_model
+from nbank_registry.models import ANIMAL_MODEL, Resource, get_animal_model
 from nbank_registry.serializers import CORE_FIELDS, metadata_keys
 
 TEMPLATE_HEADER = """\
@@ -142,7 +142,8 @@ class Mappings:
         # animals are compared by primary key, so a UUID in capitals still matches
         pk = animal_pk(value)
         if pk is None or str(pk) not in self.animals:
-            return None, "no such animal"
+            # naming the model shows when NBANK_ANIMAL_MODEL isn't the one expected
+            return None, f"no such animal in {ANIMAL_MODEL}"
         return str(pk), None
 
     def resolve(self, target: str, raw) -> tuple[str | None, tuple | None, str | None]:
