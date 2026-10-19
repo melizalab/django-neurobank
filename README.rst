@@ -113,19 +113,26 @@ fields, copies the fields into ``metadata`` in responses, and turns
 other keys to treat the same way with a setting, e.g.
 ``NBANK_METADATA_ALIASES = {"bird": "animal"}``.
 
-To move values already in metadata into the fields, run ``python manage.py
-promote_metadata --dry-run > mappings.toml``. This reports what would change
-and writes a template listing every value found, with values that can't be
-stored (an experimenter who isn't a user, or an animal that isn't in the animal
-model) first.
-Edit it to add aliases, inactive users to create, and value mappings (``"old" =
-"new"``, or ``"old" = { move = "key" }`` to keep a value in metadata under
-another key and leave the field empty). The command doesn't create animals; add
-placeholder records for the ones that aren't in the animal model. Then repeat
-the dry run with
-``--mappings mappings.toml`` until the report looks right, and run it without
-``--dry-run``. Values that can't be stored, and resources whose values conflict,
-are left in metadata. The command can be run again.
+To move values already in metadata into the fields, or to make other metadata
+consistent, run ``python manage.py normalize_metadata --dry-run >
+mappings.toml``. This reports what would change and writes a template listing
+every value found, with values that can't be stored (an experimenter who isn't a
+user, or an animal that isn't in the animal model) first. Edit it to add:
+
+- aliases: other names for a field, whose values move into the field, or for a
+  metadata key, which is renamed (e.g. ``experiment = "protocol"``);
+- inactive users to create;
+- value mappings for the fields (``[animal]``) and for metadata keys
+  (``[metadata.protocol]``): ``"old" = "new"``, or ``"old" = { move = "key" }``
+  to keep a value in metadata under another key and leave the field or key
+  empty. Add an empty table for a metadata key to have the dry run list its
+  values.
+
+The command doesn't create animals; add placeholder records for the ones that
+aren't in the animal model. Repeat the dry run with ``--mappings
+mappings.toml`` until the report looks right, and then run it without
+``--dry-run``. Values that can't be stored in a field, and resources whose
+values conflict, are left as they are. The command can be run again.
 
 Deleting is not supported in the HTTP API. A fundamental concept behind
 a registry is that resources have unique identifiers, which are never

@@ -1,7 +1,9 @@
 # -*- mode: python -*-
-"""Moves experimenter and animal out of resource metadata into their fields."""
+"""Normalizes resource metadata: moves experimenter and animal into their fields,
+and renames keys and maps values of other metadata."""
 
 import json
+import re
 import sys
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -20,15 +22,23 @@ from nbank_registry.models import Resource, get_animal_model
 from nbank_registry.serializers import CORE_FIELDS, metadata_keys
 
 TEMPLATE_HEADER = """\
-# Mappings for promote_metadata. Values are matched after trimming whitespace.
+# Mappings for normalize_metadata. Values are matched after trimming whitespace.
 #
-#   "old" = "new"             store "new" in the field
-#   "old" = { move = "key" }  leave the field empty and keep "old" in metadata as "key"
+#   [aliases]                  other names for a field (moved into the field) or
+#                              for a metadata key (renamed in metadata)
+#   [experimenter], [animal]   values for the fields
+#   [metadata.<key>]           values for a metadata key; add a table to list them
 #
-# A value with no entry is stored as it is if it's valid for the field, and is
-# otherwise left in metadata. Commented entries list the values found, with the
-# number of resources and, for a value that can't be stored, the reason.
+#   "old" = "new"             use "new" instead
+#   "old" = { move = "key" }  leave the field or key empty, and keep "old" in
+#                             metadata as "key"
+#
+# A value with no entry is kept as it is. For a field, it's stored if it's valid
+# and otherwise left in metadata. Commented entries list the values found, with
+# the number of resources and, for a value that can't be stored, the reason.
 """
+
+bare_key = re.compile(r"[A-Za-z0-9_-]+")
 
 
 def animal_pk(value: str):
@@ -51,21 +61,48 @@ def toml_str(value: str) -> str:
     return json.dumps(value)
 
 
+def toml_key(value: str) -> str:
+    return value if bare_key.fullmatch(value) else toml_str(value)
+
+
 class Mappings:
     """The contents of a mappings file, checked against the registry's users and
-    animals (as strings of their primary keys)."""
+    animals (as strings of their primary keys).
+
+    A target is a field or a metadata key being normalized. keys maps each metadata
+    key read to its target, and values maps each target to its value mappings.
+    """
 
     def __init__(self, data: dict, users: set[str], animals: set[str]):
-        unknown = set(data) - {"aliases", "users", *CORE_FIELDS}
+        unknown = set(data) - {"aliases", "users", "metadata", *CORE_FIELDS}
         if unknown:
             raise CommandError(f"unknown tables in mappings: {sorted(unknown)}")
+        tables = dict(data.get("metadata", {}))
         self.aliases = dict(data.get("aliases", {}))
-        for alias, field in self.aliases.items():
-            if field not in CORE_FIELDS:
-                raise CommandError(f"aliases: '{field}' is not one of {CORE_FIELDS}")
+        for alias, target in self.aliases.items():
+            if not isinstance(target, str) or not target:
+                raise CommandError(f"aliases: '{alias}': expected a key or field")
             if alias in CORE_FIELDS:
                 raise CommandError(f"aliases: '{alias}' is a field name")
-        self.keys = {**metadata_keys(), **self.aliases}
+            if target in self.aliases:
+                raise CommandError(f"aliases: '{target}' is itself an alias")
+        field_keys = metadata_keys()
+        self.metadata_targets = list(
+            dict.fromkeys(
+                [t for t in self.aliases.values() if t not in CORE_FIELDS]
+                + list(tables)
+            )
+        )
+        for target in self.metadata_targets:
+            if target in field_keys:
+                raise CommandError(f"metadata.{target}: '{target}' is read as a field")
+            if target in self.aliases:
+                raise CommandError(f"metadata.{target}: '{target}' is an alias")
+        self.keys = {
+            **field_keys,
+            **{t: t for t in self.metadata_targets},
+            **self.aliases,
+        }
 
         self.create = list(data.get("users", {}).get("create", []))
         for name in self.create:
@@ -75,22 +112,27 @@ class Mappings:
         self.animals = animals
 
         self.values = {field: dict(data.get(field, {})) for field in CORE_FIELDS}
-        for field, mapping in self.values.items():
+        for target in self.metadata_targets:
+            if not isinstance(tables.get(target, {}), dict):
+                raise CommandError(f"metadata.{target}: expected a table of values")
+            self.values[target] = dict(tables.get(target, {}))
+        for target, mapping in self.values.items():
+            label = target if target in CORE_FIELDS else f"metadata.{target}"
             for old, new in mapping.items():
                 if isinstance(new, dict):
                     if set(new) != {"move"} or not isinstance(new["move"], str):
                         raise CommandError(
-                            f"{field}: '{old}': expected {{ move = \"key\" }}"
+                            f"{label}: '{old}': expected {{ move = \"key\" }}"
                         )
                     if new["move"] in self.keys:
                         raise CommandError(
-                            f"{field}: '{old}': can't move to '{new['move']}', "
-                            "which is read as a field"
+                            f"{label}: '{old}': can't move to '{new['move']}', "
+                            "which is being normalized"
                         )
                 elif not isinstance(new, str) or not new:
-                    raise CommandError(f"{field}: '{old}': expected a value or a table")
-                elif reason := self.check(field, new)[1]:
-                    raise CommandError(f"{field}: '{old}' = '{new}': {reason}")
+                    raise CommandError(f"{label}: '{old}': expected a value or a table")
+                elif target in CORE_FIELDS and (reason := self.check(target, new)[1]):
+                    raise CommandError(f"{label}: '{old}' = '{new}': {reason}")
 
     def check(self, field: str, value: str) -> tuple[str | None, str | None]:
         """Returns (value as stored, None) if value can be stored in field, or
@@ -103,30 +145,36 @@ class Mappings:
             return None, "no such animal"
         return str(pk), None
 
-    def resolve(self, field: str, raw) -> tuple[str, tuple | None, str | None]:
-        """Returns (label, result, reason) for a metadata value of a field.
+    def resolve(self, target: str, raw) -> tuple[str | None, tuple | None, str | None]:
+        """Returns (label, result, reason) for a metadata value of a target.
 
-        The label is the value as matched (or its JSON for a value that can't be
-        matched). The result is ("set", value), ("move", key, value), or ("drop",)
-        for a blank value; it's None if the value can't be stored, and reason says why.
+        The label is the value as matched, or None for a metadata value that isn't a
+        string or number (which is kept as it is). The result is ("set", value),
+        ("move", key, value), or for a field ("drop",) for a blank value; it's None
+        if the value can't be stored in a field, and reason says why.
         """
         value = normalize(raw)
+        if target not in CORE_FIELDS and not isinstance(raw, str):
+            return None, ("set", raw), None
         if value is None:
             return json.dumps(raw), None, "not a string"
-        if value == "":
+        if value == "" and target in CORE_FIELDS:
             return value, ("drop",), None
-        new = self.values[field].get(value, value)
+        new = self.values[target].get(value, value)
         if isinstance(new, dict):
             return value, ("move", new["move"], value), None
-        stored, reason = self.check(field, new)
+        if target not in CORE_FIELDS:
+            return value, ("set", new), None
+        stored, reason = self.check(target, new)
         return value, (None if reason else ("set", stored)), reason
 
 
 class Command(BaseCommand):
     help = (
-        "Moves experimenter and animal values out of resource metadata "
-        "into the fields. Values that can't be stored, and resources whose values "
-        "conflict, are left as they are and reported."
+        "Moves experimenter and animal values out of resource metadata into the "
+        "fields, and renames keys and maps values of other metadata. Values that "
+        "can't be stored in a field, and resources whose values conflict, are left "
+        "as they are and reported."
     )
 
     def add_arguments(self, parser):
@@ -164,9 +212,10 @@ class Command(BaseCommand):
                     self.stderr.write(f"created inactive user '{name}'")
         self.user_ids = dict(User.objects.values_list("username", "id"))
 
-        self.seen = {field: Counter() for field in CORE_FIELDS}
+        targets = [*CORE_FIELDS, *self.mappings.metadata_targets]
+        self.seen = {target: Counter() for target in targets}
         self.reasons = {}
-        self.outcomes = {field: Counter() for field in CORE_FIELDS}
+        self.outcomes = {target: Counter() for target in targets}
         self.conflicts = []
         scanned = changed = 0
         qs = (
@@ -178,7 +227,7 @@ class Command(BaseCommand):
         while batch := list(qs.filter(id__gt=last)[:batch_size]):
             last = batch[-1].id
             scanned += len(batch)
-            updates = [resource for resource in batch if self.promote(resource)]
+            updates = [resource for resource in batch if self.normalize(resource)]
             changed += len(updates)
             if updates and not dry_run:
                 with transaction.atomic():
@@ -188,47 +237,70 @@ class Command(BaseCommand):
 
         verb = "would change" if dry_run else "changed"
         self.stderr.write(
-            f"{scanned} resources with fields in metadata; {verb} {changed}"
+            f"{scanned} resources with keys to normalize; {verb} {changed}"
         )
-        for field in CORE_FIELDS:
+        for target in targets:
             outcomes = ", ".join(
-                f"{k} {v}" for k, v in sorted(self.outcomes[field].items())
+                f"{k} {v}" for k, v in sorted(self.outcomes[target].items())
             )
-            self.stderr.write(f"  {field}: {outcomes or 'none found'}")
+            label = target if target in CORE_FIELDS else f"metadata.{target}"
+            self.stderr.write(f"  {label}: {outcomes or 'none found'}")
         for name, message in self.conflicts:
             self.stderr.write(f"  conflict in {name}: {message}")
         if dry_run:
             self.stdout.write(self.template(), ending="")
 
-    def promote(self, resource: Resource) -> bool:
-        """Moves the fields out of a resource's metadata. Returns True if anything changed."""
+    def normalize(self, resource: Resource) -> bool:
+        """Normalizes a resource's metadata. Returns True if anything changed."""
         metadata = dict(resource.metadata)
-        by_field = defaultdict(dict)
+        by_target = defaultdict(dict)
         for key, value in metadata.items():
-            if (field := self.mappings.keys.get(key)) is not None:
-                by_field[field][key] = value
+            if (target := self.mappings.keys.get(key)) is not None:
+                by_target[target][key] = value
         changed = False
-        for field, found in by_field.items():
+        for target, found in by_target.items():
             results = {}
             for key, raw in found.items():
-                label, result, reason = self.mappings.resolve(field, raw)
-                self.seen[field][label] += 1
+                label, result, reason = self.mappings.resolve(target, raw)
+                if label is not None:
+                    self.seen[target][label] += 1
                 if reason:
-                    self.reasons[field, label] = reason
+                    self.reasons[target, label] = reason
                 results[key] = result
             if None in results.values():
-                self.outcomes[field]["unresolved"] += 1
+                self.outcomes[target]["unresolved"] += 1
                 continue
-            distinct = set(results.values())
+            # compared as JSON, since metadata values can be lists or dicts
+            distinct = {json.dumps(r, sort_keys=True): r for r in results.values()}
             if len(distinct) > 1:
                 self.conflict(
-                    resource, field, f"{', '.join(found)} have different values"
+                    resource, target, f"{', '.join(found)} have different values"
                 )
                 continue
-            kind, *args = distinct.pop()
+            kind, *args = distinct.popitem()[1]
+            if target not in CORE_FIELDS:
+                if kind == "move":
+                    key, value = args
+                else:
+                    key, (value,) = target, args
+                if key not in found and metadata.get(key, value) != value:
+                    self.conflict(
+                        resource, target, f"'{key}' already has a different value"
+                    )
+                    continue
+                before = dict(metadata)
+                for k in found:
+                    del metadata[k]
+                metadata[key] = value
+                if metadata != before:
+                    self.outcomes[target]["moved" if kind == "move" else "changed"] += 1
+                    changed = True
+                else:
+                    self.outcomes[target]["unchanged"] += 1
+                continue
             if kind == "set":
                 (value,) = args
-                if field == "experimenter":
+                if target == "experimenter":
                     current = (
                         resource.experimenter.username
                         if resource.experimenter_id
@@ -237,9 +309,9 @@ class Command(BaseCommand):
                 else:
                     current = str(resource.animal_id) if resource.animal_id else None
                 if current not in (None, value):
-                    self.conflict(resource, field, f"the field is already '{current}'")
+                    self.conflict(resource, target, f"the field is already '{current}'")
                     continue
-                if field == "experimenter":
+                if target == "experimenter":
                     # a user to be created has no id in a dry run
                     resource.experimenter_id = self.user_ids.get(value)
                 else:
@@ -248,20 +320,21 @@ class Command(BaseCommand):
                 key, value = args
                 if metadata.get(key, value) != value:
                     self.conflict(
-                        resource, field, f"'{key}' already has a different value"
+                        resource, target, f"'{key}' already has a different value"
                     )
                     continue
                 metadata[key] = value
             for key in found:
                 del metadata[key]
-            self.outcomes[field][kind] += 1
+            self.outcomes[target][kind] += 1
             changed = True
         resource.metadata = metadata
         return changed
 
-    def conflict(self, resource: Resource, field: str, message: str):
-        self.outcomes[field]["conflict"] += 1
-        self.conflicts.append((resource.name, f"{field}: {message}"))
+    def conflict(self, resource: Resource, target: str, message: str):
+        self.outcomes[target]["conflict"] += 1
+        label = target if target in CORE_FIELDS else f"metadata.{target}"
+        self.conflicts.append((resource.name, f"{label}: {message}"))
 
     def template(self) -> str:
         """Returns the mappings, with the values found as commented entries."""
@@ -273,8 +346,8 @@ class Command(BaseCommand):
             if alias != field and alias not in m.aliases
         ]
         lines += [
-            f"{toml_str(alias)} = {toml_str(field)}"
-            for alias, field in m.aliases.items()
+            f"{toml_str(alias)} = {toml_str(target)}"
+            for alias, target in m.aliases.items()
         ]
 
         candidates = [
@@ -297,26 +370,31 @@ class Command(BaseCommand):
         ]
         lines.append("]")
 
-        for field in CORE_FIELDS:
-            mapping = m.values[field]
-            lines += ["", f"[{field}]"]
+        for target in [*CORE_FIELDS, *m.metadata_targets]:
+            mapping = m.values[target]
+            table = target if target in CORE_FIELDS else f"metadata.{toml_key(target)}"
+            lines += ["", f"[{table}]"]
             for old, new in mapping.items():
-                target = (
+                value = (
                     f"{{ move = {toml_str(new['move'])} }}"
                     if isinstance(new, dict)
                     else toml_str(new)
                 )
                 lines.append(
-                    f"{toml_str(old)} = {target}  # {self.seen[field][old]} resources"
+                    f"{toml_str(old)} = {value}  # {self.seen[target][old]} resources"
                 )
             # values that can't be stored first, then the rest by frequency
             found = sorted(
-                (value for value in self.seen[field] if value not in mapping),
-                key=lambda v: ((field, v) not in self.reasons, -self.seen[field][v], v),
+                (value for value in self.seen[target] if value not in mapping),
+                key=lambda v: (
+                    (target, v) not in self.reasons,
+                    -self.seen[target][v],
+                    v,
+                ),
             )
             for value in found:
-                note = f"{self.seen[field][value]} resources"
-                if reason := self.reasons.get((field, value)):
+                note = f"{self.seen[target][value]} resources"
+                if reason := self.reasons.get((target, value)):
                     note += f": {reason}"
                 lines.append(f'# {toml_str(value)} = ""  # {note}')
         return "\n".join(lines) + "\n"
