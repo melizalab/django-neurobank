@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
 # -*- mode: python -*-
-from __future__ import unicode_literals
 
 import re
 
@@ -115,7 +113,7 @@ class LocationField(serializers.Field):
             and "archive" in data
             and set(data) <= {"archive", "key"}
             and isinstance(data["archive"], str)
-            and isinstance(data.get("key"), (str, type(None)))
+            and isinstance(data.get("key"), str | None)
         ):
             name, key = data["archive"], data.get("key")
         else:

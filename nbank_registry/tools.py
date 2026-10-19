@@ -1,6 +1,4 @@
-# -*- coding: utf-8 -*-
 # -*- mode: python -*-
-from __future__ import unicode_literals
 
 import random
 

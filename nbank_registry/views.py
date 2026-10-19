@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # -*- mode: python -*-
 import itertools
 import json
@@ -203,7 +202,7 @@ class ResourceList(generics.ListCreateAPIView):
     pagination_class = LinkHeaderPagination
 
     def filter_queryset(self, queryset):
-        qs = super(ResourceList, self).filter_queryset(queryset)
+        qs = super().filter_queryset(queryset)
         # this could be a little dangerous b/c we're letting the user design
         # queries
         mf = {}

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # -*- mode: python -*-
 import hashlib
 import json
@@ -418,7 +417,9 @@ class TestLocation:
         assert response.status_code == status.HTTP_200_OK
         assert len(response.data) == 1
 
-    def test_location_list_query_count_is_constant(self, client, django_assert_max_num_queries):
+    def test_location_list_query_count_is_constant(
+        self, client, django_assert_max_num_queries
+    ):
         # one query for the resource (with its dtype), one for its locations
         # (with their archives); this should not grow with the number of
         # locations
@@ -634,7 +635,9 @@ class TestLocation:
             name="dataverse-b", scheme="dataverse", root="dataverse.example.edu/b"
         )
         other_resource = Resource.objects.create(dtype=self.dtype, created_by=self.user)
-        Location.objects.create(resource=other_resource, archive=archive_a, key="123456")
+        Location.objects.create(
+            resource=other_resource, archive=archive_a, key="123456"
+        )
         response = auth_client.post(
             reverse("neurobank:location-list", args=[self.resource]),
             {"archive_name": archive_b.name, "key": "123456"},
@@ -689,7 +692,9 @@ class TestLocation:
             password=user_password,
             email="normal-user@domain.com",
         )
-        normal_user.user_permissions.add(Permission.objects.get(codename="add_location"))
+        normal_user.user_permissions.add(
+            Permission.objects.get(codename="add_location")
+        )
         normal_user.user_permissions.add(
             Permission.objects.get(codename="delete_location")
         )
@@ -1325,9 +1330,7 @@ class TestDownload:
         monkeypatch.setattr(resource_download, "resolve_extension", fail)
 
     def test_lookup_uses_dtype_extension_without_glob(self, client, monkeypatch):
-        dtype = DataType.objects.create(
-            name="wav", downloadable=True, extension=".wav"
-        )
+        dtype = DataType.objects.create(name="wav", downloadable=True, extension=".wav")
         resource, path = self._create_file(b"wav data", dtype=dtype)
         wav_path = Path(path).with_name(resource.filename())
         Path(path).rename(wav_path)

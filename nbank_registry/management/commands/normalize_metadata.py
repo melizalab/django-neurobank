@@ -46,7 +46,7 @@ def animal_pk(value: str):
 
 def normalize(value) -> str | None:
     """Returns a metadata value as a trimmed string, or None if it's not a string or number."""
-    if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+    if isinstance(value, bool) or not isinstance(value, str | int | float):
         return None
     return str(value).strip()
 
