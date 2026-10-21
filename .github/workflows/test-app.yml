@@ -34,22 +34,6 @@ jobs:
           - python-version: "3.11"
             django-version: "6.1"
 
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: test_db
-        ports:
-          - 5432:5432
-        # Add a health check to ensure postgres is ready
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
     steps:
     - uses: actions/checkout@v7
     - name: Install uv
@@ -58,6 +42,16 @@ jobs:
         enable-cache: true
         version: "latest"
         python-version: ${{ matrix.python-version }}
+    - name: Start PostgreSQL
+      # the runner image has PostgreSQL installed, with the service disabled;
+      # using it avoids pulling a container image, which registries limit for
+      # anonymous pulls from shared runner addresses
+      run: |
+        sudo systemctl start postgresql.service
+        pg_isready --timeout=30
+        sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+        sudo -u postgres createdb test_db
+        psql --version
     - name: Install dependencies
       env:
         DJANGO_VERSION: ${{ matrix.django-version }}
