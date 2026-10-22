@@ -20,7 +20,10 @@ jobs:
           if [[ ! "${{ github.ref }}" =~ ^refs/tags/ ]]; then
             BUILD_NUM=${{ github.run_number }}
             VERSION=$(grep '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')
-            sed -i -e "s/^version = \"${VERSION}\"/version = \"${VERSION}.dev${BUILD_NUM}\"/" pyproject.toml
+            # a version can have only one .dev segment, so replace any there is
+            # (e.g. 1.0.0.dev0 builds as 1.0.0.dev<run number>)
+            BASE=${VERSION%.dev*}
+            sed -i -e "s/^version = \"${VERSION}\"/version = \"${BASE}.dev${BUILD_NUM}\"/" pyproject.toml
           fi
       - name: Install uv
         uses: astral-sh/setup-uv@v7
