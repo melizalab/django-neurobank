@@ -24,6 +24,9 @@ Added
   ``?superseded_by=``. Superseded resources are still listed by default.
 * ``info/`` reports who the request is from (``user``: their username, whether
   they're a superuser, and their registry permissions), or null if anonymous.
+* The resource admin looks up animals and replacements with autocomplete. A
+  site with its own animal model gets autocomplete if that model's admin has
+  ``search_fields``, and a raw id field otherwise.
 * ``check/resources/`` checks whether a resource could be created, without
   creating it (#11): POST the same body as to ``resources/`` for 200, or 400
   with the errors creating it would give. POST a list (up to 1,000) to check

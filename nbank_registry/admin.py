@@ -2,7 +2,14 @@
 
 from django.contrib import admin
 
-from nbank_registry.models import Animal, Archive, DataType, Location, Resource
+from nbank_registry.models import (
+    Animal,
+    Archive,
+    DataType,
+    Location,
+    Resource,
+    get_animal_model,
+)
 
 
 class LocationInline(admin.TabularInline):
@@ -37,13 +44,10 @@ class ResourceAdmin(admin.ModelAdmin):
     list_display = ("name", "dtype", "experimenter", "animal", "created_on")
     list_select_related = ("dtype", "experimenter", "animal")
     # there can be thousands of animals and resources, too many for a drop-down.
-    # Autocomplete needs an admin with search_fields for the model, which a site
-    # with its own animal model (NBANK_ANIMAL_MODEL) may not register
-    if Animal._meta.swapped:
-        autocomplete_fields = ("superseded_by",)
-        raw_id_fields = ("animal",)
-    else:
-        autocomplete_fields = ("animal", "superseded_by")
+    # animal gets autocomplete too if its model's admin supports it (see
+    # get_autocomplete_fields), and a raw id field otherwise
+    autocomplete_fields = ("superseded_by",)
+    raw_id_fields = ("animal",)
     list_filter = (
         "dtype",
         "location__archive",
@@ -58,6 +62,17 @@ class ResourceAdmin(admin.ModelAdmin):
         "metadata__icontains",
     )
     inlines = (LocationInline,)
+
+    def get_autocomplete_fields(self, request):
+        """Adds animal if its model has an admin with search_fields, which
+        autocomplete needs. A site with its own animal model (NBANK_ANIMAL_MODEL)
+        may not register one, and its admin may be registered after this one,
+        so this is decided when a page is built rather than at import."""
+        fields = super().get_autocomplete_fields(request)
+        animal_admin = self.admin_site._registry.get(get_animal_model())
+        if animal_admin is not None and animal_admin.get_search_fields(request):
+            fields = (*fields, "animal")
+        return fields
 
 
 admin.site.register(Resource, ResourceAdmin)
