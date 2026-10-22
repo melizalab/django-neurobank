@@ -34,7 +34,7 @@ classifiers = [
 ]
 dependencies = [
     "django>=5.2,<6.2",
-    "djangorestframework>=3.18,<4",
+    "djangorestframework>=3.18.2,<4",
     "djangorestframework-link-header-pagination>=0.1.1,<0.2",
     "django-filter>=25.1,<27",
     "django-sendfile2>=0.7,<1",
