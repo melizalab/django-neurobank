@@ -59,6 +59,16 @@ jobs:
         uv sync --frozen --group postgres
         # uv add would fail to resolve django 6.1 for python 3.11, so override in the environment
         uv pip install "Django~=${DJANGO_VERSION}"
+    - name: Apply the migrations to PostgreSQL
+      # the tests build their database from the models, so this is what runs
+      # the migrations themselves, with each kind of animal model
+      env:
+        NBANK_TEST_DB: postgres
+      run: |
+        uv run --no-sync python -m django migrate --settings=nbank_registry.tests.settings
+        sudo -u postgres createdb test_db_uuid
+        POSTGRES_DB=test_db_uuid NBANK_TEST_ANIMAL_MODEL=uuid \
+          uv run --no-sync python -m django migrate --settings=nbank_registry.tests.settings
     - name: Run tests on python ${{ matrix.python-version }}
       env:
         NBANK_TEST_DB: postgres

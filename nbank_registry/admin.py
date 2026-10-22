@@ -36,8 +36,14 @@ class ResourceAdmin(admin.ModelAdmin):
     )
     list_display = ("name", "dtype", "experimenter", "animal", "created_on")
     list_select_related = ("dtype", "experimenter", "animal")
-    # there can be thousands of animals and resources, too many for a drop-down
-    autocomplete_fields = ("animal", "superseded_by")
+    # there can be thousands of animals and resources, too many for a drop-down.
+    # Autocomplete needs an admin with search_fields for the model, which a site
+    # with its own animal model (NBANK_ANIMAL_MODEL) may not register
+    if Animal._meta.swapped:
+        autocomplete_fields = ("superseded_by",)
+        raw_id_fields = ("animal",)
+    else:
+        autocomplete_fields = ("animal", "superseded_by")
     list_filter = (
         "dtype",
         "location__archive",
@@ -59,4 +65,4 @@ admin.site.register(DataType, DataTypeAdmin)
 admin.site.register(Archive, ArchiveAdmin)
 # a site with its own animal model (NBANK_ANIMAL_MODEL) manages animals in that app
 if not Animal._meta.swapped:
-    admin.site.register(Animal)
+    admin.site.register(Animal, search_fields=("name",))
