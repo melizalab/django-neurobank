@@ -7,6 +7,22 @@ upload to PyPI for releases that were never tagged. 0.10.13 was never released,
 and 0.6.0 to 0.7.2 were not published to PyPI. Numbers like #46 refer to issues
 on GitHub.
 
+Unreleased
+----------
+
+API version 1.3.
+
+Added
+~~~~~
+
+* Resources can be marked as superseded or not to be used (#45):
+  ``superseded_on`` (when it was marked; null if the resource can be used), and
+  optionally ``superseded_by`` (the resource to use instead) and
+  ``superseded_note`` (why, or what replaces it), which need ``superseded_on``.
+  Only superusers can mark or unmark a resource, and a resource that supersedes
+  others can't be deleted. Searches: ``?superseded=true|false`` and
+  ``?superseded_by=``. Superseded resources are still listed by default.
+
 0.12.0 (2026-10-19)
 -------------------
 

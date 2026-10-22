@@ -73,6 +73,24 @@ class Resource(models.Model):
         null=True,
         help_text="the animal the data came from (null if synthetic or from more than one animal)",
     )
+    superseded_on = models.DateTimeField(
+        blank=True,
+        null=True,
+        help_text="when the resource was marked as superseded or not to be used; "
+        "null if it can be used",
+    )
+    superseded_by = models.ForeignKey(
+        "self",
+        related_name="supersedes",
+        on_delete=models.PROTECT,
+        blank=True,
+        null=True,
+        help_text="the resource to use instead",
+    )
+    superseded_note = models.TextField(
+        blank=True,
+        help_text="why the resource shouldn't be used, or what replaces it",
+    )
 
     def __str__(self):
         return str(self.name)
@@ -87,6 +105,16 @@ class Resource(models.Model):
 
     class Meta:
         ordering = ["-id"]
+        constraints = [
+            # superseded_on alone says whether the resource is superseded
+            models.CheckConstraint(
+                condition=models.Q(superseded_on__isnull=False)
+                | models.Q(superseded_by__isnull=True, superseded_note=""),
+                name="resource_superseded_details_need_superseded_on",
+                violation_error_message="superseded_by and superseded_note need "
+                "superseded_on",
+            )
+        ]
 
 
 class DataType(models.Model):

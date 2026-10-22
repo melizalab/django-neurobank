@@ -152,6 +152,18 @@ name and managed in the admin. If you use `django-bird-colony
 run. You always have to use the animal's full official ID with the animal field,
 except when searching for partial IDs with ``?animal__istartswith=``.
 
+A resource that shouldn't be used, such as a duplicate or an erroneous deposit
+caught after others have cited it, can be marked as superseded instead of being
+deleted, so its name stays valid and clients can warn about it. A resource is
+superseded when ``superseded_on`` is set (to when it was marked).
+``superseded_by`` can name the resource to use instead, and ``superseded_note``
+can say why, or name the replacements of a resource that was split; with no
+replacement, the resource just shouldn't be used. Both need ``superseded_on``,
+and setting it to null unmarks the resource and clears them. Only superusers
+can mark or unmark resources, and a resource that supersedes others can't be
+deleted. Searches include superseded resources: ``?superseded=false`` leaves
+them out, and ``?superseded_by=`` finds those a resource replaces.
+
 When a resource is created (or updated), ``locations`` lists the archives that
 hold it, by name. An entry can also be ``{"archive": name, "key": key}`` to
 record where the resource is within the archive, such as the name of the stored

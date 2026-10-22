@@ -182,6 +182,19 @@ class ResourceSerializer(serializers.ModelSerializer):
         queryset=get_animal_model().objects.all(), required=False, allow_null=True
     )
     metadata = serializers.JSONField(required=False)
+    superseded_by = serializers.SlugRelatedField(
+        queryset=Resource.objects.all(),
+        slug_field="name",
+        required=False,
+        allow_null=True,
+        error_messages={
+            "does_not_exist": "no such resource '{value}'",
+            "invalid": "invalid resource name",
+        },
+    )
+    superseded_note = serializers.CharField(
+        required=False, allow_blank=True, allow_null=True
+    )
 
     def to_internal_value(self, data):
         """Moves core fields sent in metadata to their own fields."""
@@ -209,18 +222,20 @@ class ResourceSerializer(serializers.ModelSerializer):
             data["metadata"] = {**(data.get("metadata") or {}), **copies}
         return data
 
+    def is_superuser(self) -> bool:
+        try:
+            return self.context["request"].user.is_superuser
+        except (AttributeError, KeyError):
+            return False
+
     def validate_sha1(self, value):
         """If updating, check if user has permission. Check if valid sha1"""
         if value is not None:
             if sha1_re.match(value) is None:
                 raise serializers.ValidationError("invalid sha1 value")
             value = value.lower()
-        try:
-            is_superuser = self.context["request"].user.is_superuser
-        except (AttributeError, KeyError):
-            is_superuser = False
         if self.instance is not None:
-            if not is_superuser and self.instance.sha1 != value:
+            if not self.is_superuser() and self.instance.sha1 != value:
                 raise serializers.ValidationError(
                     "sha1 value cannot be updated; create a new resource"
                 )
@@ -247,6 +262,50 @@ class ResourceSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("metadata must be a dictionary")
         return value
 
+    def validate_superseded_note(self, value):
+        # null clears the note, like an empty string
+        return value or ""
+
+    def validate(self, attrs):
+        """Only superusers can mark a resource as superseded or unmark it, and a
+        resource can't be superseded by itself or by one it supersedes.
+
+        superseded_on says whether the resource is superseded: superseded_by and
+        superseded_note need it, and setting it to null clears them.
+        """
+        details = ("superseded_by", "superseded_note")
+        for field in ("superseded_on", *details):
+            if field not in attrs:
+                continue
+            current = getattr(self.instance, field, None) or None
+            if (attrs[field] or None) != current and not self.is_superuser():
+                raise serializers.ValidationError(
+                    {field: ["only a superuser can mark a resource as superseded"]}
+                )
+        if "superseded_on" in attrs:
+            superseded_on = attrs["superseded_on"]
+        else:
+            superseded_on = getattr(self.instance, "superseded_on", None)
+        if superseded_on is None:
+            for field in details:
+                if attrs.get(field):
+                    raise serializers.ValidationError(
+                        {field: ["needs superseded_on to mark the resource"]}
+                    )
+            if self.instance is not None:
+                attrs.update(superseded_by=None, superseded_note="")
+        replacement = attrs.get("superseded_by")
+        if replacement is not None and self.instance is not None:
+            seen = set()
+            while replacement is not None and replacement.pk not in seen:
+                if replacement.pk == self.instance.pk:
+                    raise serializers.ValidationError(
+                        {"superseded_by": ["a resource can't supersede itself"]}
+                    )
+                seen.add(replacement.pk)
+                replacement = replacement.superseded_by
+        return attrs
+
     def create(self, validated_data):
         locations = validated_data.pop("locations", [])
         resource = Resource.objects.create(**validated_data)
@@ -266,7 +325,12 @@ class ResourceSerializer(serializers.ModelSerializer):
                 Location.objects.create(resource=instance, archive=archive, key=key)
         instance.dtype = validated_data.get("dtype", instance.dtype)
         instance.sha1 = validated_data.get("sha1", instance.sha1)
-        for field in CORE_FIELDS:
+        for field in (
+            *CORE_FIELDS,
+            "superseded_on",
+            "superseded_by",
+            "superseded_note",
+        ):
             if field in validated_data:
                 setattr(instance, field, validated_data[field])
         if "metadata" in validated_data:
@@ -293,6 +357,9 @@ class ResourceSerializer(serializers.ModelSerializer):
             "locations",
             "created_by",
             "created_on",
+            "superseded_on",
+            "superseded_by",
+            "superseded_note",
         )
         extra_kwargs = {
             "name": unique_name_kwargs(

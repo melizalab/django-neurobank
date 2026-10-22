@@ -4,7 +4,7 @@ import json
 from urllib.parse import urlparse
 
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db.models import Q
+from django.db.models import ProtectedError, Q
 from django.db.utils import IntegrityError
 from django.http import StreamingHttpResponse
 from django.shortcuts import get_object_or_404
@@ -145,6 +145,10 @@ class ResourceFilter(filters.FilterSet):
     animal__istartswith = filters.CharFilter(
         field_name="animal__pk", lookup_expr="istartswith"
     )
+    superseded = filters.BooleanFilter(
+        field_name="superseded_on", lookup_expr="isnull", exclude=True
+    )
+    superseded_by = filters.CharFilter(field_name="superseded_by__name")
 
     def filter_sha1(self, queryset, name, value):
         return queryset.filter(sha1=value.lower())
@@ -193,7 +197,7 @@ class ResourceList(generics.ListCreateAPIView):
     """
 
     queryset = models.Resource.objects.select_related(
-        "dtype", "created_by", "experimenter"
+        "dtype", "created_by", "experimenter", "superseded_by"
     ).prefetch_related("locations")
     serializer_class = serializers.ResourceSerializer
     filter_backends = (filters.DjangoFilterBackend,)
@@ -249,10 +253,22 @@ class ResourceList(generics.ListCreateAPIView):
 class ResourceDetail(generics.RetrieveUpdateDestroyAPIView):
     lookup_field = "name"
     queryset = models.Resource.objects.select_related(
-        "dtype", "created_by", "experimenter"
+        "dtype", "created_by", "experimenter", "superseded_by"
     ).prefetch_related("locations")
     serializer_class = serializers.ResourceSerializer
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
+
+    def destroy(self, request, *args, **kwargs):
+        try:
+            return super().destroy(request, *args, **kwargs)
+        except ProtectedError:
+            names = ", ".join(
+                r.name for r in self.get_object().supersedes.order_by("name")
+            )
+            return Response(
+                {"detail": f"can't delete a resource that supersedes others ({names})"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 @api_view(["GET"])
@@ -418,7 +434,9 @@ def bulk_resource_list(request, format=None):
     query = Q()
     for name in names:
         query |= Q(name=name)
-    qs = models.Resource.objects.filter(query).select_related("experimenter")
+    qs = models.Resource.objects.filter(query).select_related(
+        "experimenter", "superseded_by"
+    )
     renderer = JSONLRenderer()
     gen = (renderer.render(serializers.ResourceSerializer(obj).data) for obj in qs)
 

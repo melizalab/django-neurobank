@@ -5,6 +5,7 @@ import os
 import posixpath as ppath
 import tempfile
 import uuid
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -1363,10 +1364,10 @@ class TestDownload:
         assert "download_url" not in response.data
 
 
-def test_api_info_reports_version_1_2(client):
+def test_api_info_reports_version_1_3(client):
     response = client.get(reverse("neurobank:api-info"))
     assert response.status_code == status.HTTP_200_OK
-    assert response.data["api_version"] == "1.2"
+    assert response.data["api_version"] == "1.3"
 
 
 class TestCoreFields:
@@ -1696,3 +1697,194 @@ class TestResourceLocationKeys:
         )
         assert response.status_code == status.HTTP_200_OK
         assert self.keys(name) == {"local": "res_1.wav", "remote": None}
+
+
+class TestSuperseded:
+    WHEN = "2026-10-22T12:00:00Z"
+
+    @pytest.fixture(autouse=True)
+    def setup(self, user):
+        self.user = user
+        self.dtype = DataType.objects.create(name="spike_times")
+        self.old, self.new, self.other = (
+            Resource.objects.create(name=name, dtype=self.dtype, created_by=user)
+            for name in ("old", "new", "other")
+        )
+
+    def patch(self, client, resource, data):
+        return client.patch(
+            reverse("neurobank:resource", args=[resource]), data, format="json"
+        )
+
+    def mark(self, client, resource, **details):
+        return self.patch(client, resource, {"superseded_on": self.WHEN, **details})
+
+    @staticmethod
+    def same_time(a, b):
+        # the registry gives times in its own time zone
+        return datetime.fromisoformat(a) == datetime.fromisoformat(b)
+
+    def normal_client(self, client, user_password):
+        user = User.objects.create_user(username="normal_user", password=user_password)
+        user.user_permissions.add(Permission.objects.get(codename="change_resource"))
+        client.login(username="normal_user", password=user_password)
+        return client
+
+    def test_not_superseded_by_default(self, client):
+        response = client.get(reverse("neurobank:resource", args=[self.old]))
+        assert response.data["superseded_on"] is None
+        assert response.data["superseded_by"] is None
+        assert response.data["superseded_note"] == ""
+
+    def test_superseded_by_another_resource(self, auth_client):
+        response = self.mark(
+            auth_client, self.old, superseded_by="new", superseded_note="dup"
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert self.same_time(response.data["superseded_on"], self.WHEN)
+        assert response.data["superseded_by"] == "new"
+        assert response.data["superseded_note"] == "dup"
+
+    def test_marked_not_to_be_used(self, auth_client):
+        response = self.mark(auth_client, self.old, superseded_note="no data")
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["superseded_by"] is None
+
+    def test_details_of_a_marked_resource_can_change(self, auth_client):
+        self.mark(auth_client, self.old)
+        response = self.patch(auth_client, self.old, {"superseded_by": "new"})
+        assert response.status_code == status.HTTP_200_OK
+        assert self.same_time(response.data["superseded_on"], self.WHEN)
+
+    @pytest.mark.parametrize(
+        "data", [{"superseded_by": "new"}, {"superseded_note": "no data"}]
+    )
+    def test_details_need_superseded_on(self, auth_client, data):
+        response = self.patch(auth_client, self.old, data)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "needs superseded_on" in str(response.data)
+
+    def test_unmarking_clears_the_details(self, auth_client):
+        self.mark(auth_client, self.old, superseded_by="new", superseded_note="x")
+        response = self.patch(auth_client, self.old, {"superseded_on": None})
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["superseded_on"] is None
+        assert response.data["superseded_by"] is None
+        assert response.data["superseded_note"] == ""
+
+    def test_cannot_unmark_and_give_details(self, auth_client):
+        self.mark(auth_client, self.old)
+        response = self.patch(
+            auth_client, self.old, {"superseded_on": None, "superseded_by": "new"}
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_database_refuses_details_without_superseded_on(self):
+        from django.db import IntegrityError, transaction
+
+        self.old.superseded_note = "no data"
+        with pytest.raises(IntegrityError), transaction.atomic():
+            self.old.save()
+
+    @pytest.mark.parametrize(
+        "data",
+        [
+            {"superseded_on": WHEN},
+            {"superseded_on": WHEN, "superseded_by": "new"},
+        ],
+    )
+    def test_only_a_superuser_can_mark(self, client, user_password, data):
+        response = self.patch(self.normal_client(client, user_password), self.old, data)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "superuser" in str(response.data)
+
+    @pytest.mark.parametrize(
+        "data", [{"superseded_on": None}, {"superseded_note": "changed"}]
+    )
+    def test_only_a_superuser_can_unmark_or_change(
+        self, auth_client, client, user_password, data
+    ):
+        self.mark(auth_client, self.old, superseded_note="no data")
+        auth_client.logout()
+        response = self.patch(self.normal_client(client, user_password), self.old, data)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_others_can_update_a_superseded_resource(
+        self, auth_client, client, user_password
+    ):
+        self.mark(auth_client, self.old, superseded_by="new")
+        auth_client.logout()
+        response = self.patch(
+            self.normal_client(client, user_password),
+            self.old,
+            {"metadata": {"pen": 1}, "superseded_by": "new"},
+        )
+        assert response.status_code == status.HTTP_200_OK
+        assert response.data["superseded_by"] == "new"
+
+    def test_cannot_supersede_itself(self, auth_client):
+        response = self.mark(auth_client, self.old, superseded_by="old")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_cannot_supersede_in_a_cycle(self, auth_client):
+        self.mark(auth_client, self.old, superseded_by="new")
+        self.mark(auth_client, self.new, superseded_by="other")
+        response = self.mark(auth_client, self.other, superseded_by="old")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    def test_unknown_replacement(self, auth_client):
+        response = self.mark(auth_client, self.old, superseded_by="nope")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "no such resource 'nope'" in str(response.data)
+
+    def test_can_be_created_superseded(self, auth_client):
+        response = auth_client.post(
+            reverse("neurobank:resource-list"),
+            {
+                "dtype": self.dtype.name,
+                "superseded_on": self.WHEN,
+                "superseded_by": "new",
+            },
+            format="json",
+        )
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data["superseded_by"] == "new"
+
+    def test_filters(self, auth_client):
+        self.mark(auth_client, self.old, superseded_by="new")
+        self.mark(auth_client, self.other, superseded_note="no data")
+
+        def names(**params):
+            response = auth_client.get(reverse("neurobank:resource-list"), params)
+            return sorted(r["name"] for r in response.data)
+
+        assert names() == ["new", "old", "other"]
+        assert names(superseded="true") == ["old", "other"]
+        assert names(superseded="false") == ["new"]
+        assert names(superseded_by="new") == ["old"]
+
+    def test_replacement_cannot_be_deleted(self, auth_client):
+        self.mark(auth_client, self.old, superseded_by="new")
+        response = auth_client.delete(reverse("neurobank:resource", args=[self.new]))
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "(old)" in response.data["detail"]
+        response = auth_client.delete(reverse("neurobank:resource", args=[self.old]))
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+
+    def test_bulk_records_include_the_fields(self, auth_client):
+        self.mark(auth_client, self.old, superseded_by="new")
+        response = auth_client.post(
+            reverse("neurobank:bulk-resource-list"), {"names": ["old"]}, format="json"
+        )
+        [record] = [json.loads(line) for line in response]
+        assert record["superseded_by"] == "new"
+
+    def test_list_query_count_is_constant(
+        self, auth_client, django_assert_max_num_queries
+    ):
+        for resource in (self.old, self.other):
+            self.mark(auth_client, resource, superseded_by="new")
+        # anonymous, as in TestResource, so there's no session to look up
+        auth_client.logout()
+        with django_assert_max_num_queries(2):
+            auth_client.get(reverse("neurobank:resource-list"))

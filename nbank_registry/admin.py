@@ -30,11 +30,14 @@ class ResourceAdmin(admin.ModelAdmin):
         "animal",
         "metadata",
         "created_by",
+        "superseded_on",
+        "superseded_by",
+        "superseded_note",
     )
     list_display = ("name", "dtype", "experimenter", "animal", "created_on")
     list_select_related = ("dtype", "experimenter", "animal")
-    # there can be thousands of animals, too many for a drop-down
-    raw_id_fields = ("animal",)
+    # there can be thousands of animals and resources, too many for a drop-down
+    autocomplete_fields = ("animal", "superseded_by")
     list_filter = (
         "dtype",
         "location__archive",
