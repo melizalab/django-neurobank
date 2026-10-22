@@ -22,6 +22,11 @@ Added
   Only superusers can mark or unmark a resource, and a resource that supersedes
   others can't be deleted. Searches: ``?superseded=true|false`` and
   ``?superseded_by=``. Superseded resources are still listed by default.
+* ``check/resources/`` checks whether a resource could be created, without
+  creating it (#11): POST the same body as to ``resources/`` for 200, or 400
+  with the errors creating it would give. POST a list (up to 1,000) to check
+  several resources, including against each other: 200 with the errors for each.
+  Needs permission to create resources.
 
 0.12.0 (2026-10-19)
 -------------------

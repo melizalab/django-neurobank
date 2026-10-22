@@ -124,6 +124,12 @@ the registry's URLs are included:
   (PATCH), remove it (DELETE).
 - ``archives/``, ``archives/<name>/``: archives (GET, POST; GET, PUT, PATCH).
 - ``datatypes/``, ``datatypes/<name>/``: data types (GET, POST; GET).
+- ``check/resources/``: whether a resource could be created (POST the same body
+  as to ``resources/``), without creating it: 200, or 400 with the errors
+  creating it would give. POST a list of bodies (up to 1,000) to check several:
+  200 with the errors for each one in order (``{}`` if it could be created),
+  counting a name or hash that an earlier one in the list has. Another deposit
+  can still take a name or hash before the resource is created.
 - ``bulk/resources/``, ``bulk/locations/``: records or locations for many
   resources at once (POST ``{"names": [...]}``), as line-delimited JSON.
 - ``download/<name>/``: the resource's file, for resources in archives on the

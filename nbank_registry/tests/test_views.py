@@ -376,20 +376,6 @@ class TestResource:
             "test_field": "value"
         }
 
-    @pytest.mark.skip(reason="not implemented")
-    def test_can_dry_run_create_resource(self, auth_client):
-        response = auth_client.post(
-            reverse("neurobank:resource-test-create"),
-            {
-                "dtype": self.dtype.name,
-            },
-        )
-        assert response.status_code == status.HTTP_201_CREATED
-        response2 = auth_client.get(
-            reverse("neurobank:resource", args=[response.data["name"]])
-        )
-        assert response2.status_code == status.HTTP_404_NOT_FOUND
-
 
 class TestLocation:
     @pytest.fixture(autouse=True)
@@ -1888,3 +1874,148 @@ class TestSuperseded:
         auth_client.logout()
         with django_assert_max_num_queries(2):
             auth_client.get(reverse("neurobank:resource-list"))
+
+
+class TestResourceCheck:
+    @pytest.fixture(autouse=True)
+    def setup(self, user):
+        self.dtype = DataType.objects.create(name="spike_times")
+        Archive.objects.create(name="local", scheme="neurobank", root="/data")
+        self.existing = Resource.objects.create(
+            name="taken",
+            sha1=hashlib.sha1(b"taken").hexdigest(),
+            dtype=self.dtype,
+            created_by=user,
+        )
+
+    def check(self, client, body):
+        return client.post(reverse("neurobank:resource-check"), body, format="json")
+
+    def test_valid_resource(self, auth_client):
+        body = {
+            "name": "new",
+            "dtype": "spike_times",
+            "sha1": hashlib.sha1(b"new").hexdigest(),
+            "locations": ["local"],
+            "metadata": {"pen": 1},
+        }
+        response = self.check(auth_client, body)
+        assert response.status_code == status.HTTP_200_OK
+        assert not Resource.objects.filter(name="new").exists()
+
+    def test_without_a_name(self, auth_client):
+        response = self.check(auth_client, {"dtype": "spike_times"})
+        assert response.status_code == status.HTTP_200_OK
+        assert Resource.objects.count() == 1
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            pytest.param({"name": "taken"}, id="name-taken"),
+            pytest.param(
+                {"sha1": hashlib.sha1(b"taken").hexdigest().upper()}, id="sha1-taken"
+            ),
+            pytest.param({"sha1": "abc"}, id="sha1-invalid"),
+            pytest.param({"dtype": "nope"}, id="unknown-dtype"),
+            pytest.param({"metadata": ["pen", 1]}, id="metadata-not-object"),
+            pytest.param({"locations": ["nowhere"]}, id="unknown-archive"),
+            pytest.param({"experimenter": "nobody"}, id="unknown-experimenter"),
+            pytest.param({"name": "bad name"}, id="invalid-name"),
+        ],
+    )
+    def test_gives_the_errors_of_creating(self, auth_client, body):
+        body = {"name": "new", "dtype": "spike_times", **body}
+        checked = self.check(auth_client, body)
+        assert checked.status_code == status.HTTP_400_BAD_REQUEST
+        assert Resource.objects.count() == 1
+        created = auth_client.post(
+            reverse("neurobank:resource-list"), body, format="json"
+        )
+        assert created.status_code == status.HTTP_400_BAD_REQUEST
+        assert checked.data == created.data
+
+    def test_anonymous_cannot_check(self, client):
+        response = self.check(client, {"dtype": "spike_times"})
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_needs_permission_to_create(self, client, user_password):
+        User.objects.create_user(username="reader", password=user_password)
+        client.login(username="reader", password=user_password)
+        response = self.check(client, {"dtype": "spike_times"})
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_only_post(self, auth_client):
+        response = auth_client.get(reverse("neurobank:resource-check"))
+        assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
+
+
+class TestResourceCheckMany:
+    @pytest.fixture(autouse=True)
+    def setup(self, user):
+        self.dtype = DataType.objects.create(name="spike_times")
+        Resource.objects.create(name="taken", dtype=self.dtype, created_by=user)
+
+    def check(self, client, bodies):
+        return client.post(reverse("neurobank:resource-check"), bodies, format="json")
+
+    def test_each_resource_is_checked(self, auth_client):
+        response = self.check(
+            auth_client,
+            [
+                {"name": "a", "dtype": "spike_times"},
+                {"name": "taken", "dtype": "spike_times"},
+                {"name": "b", "dtype": "nope"},
+            ],
+        )
+        assert response.status_code == status.HTTP_200_OK
+        ok, taken, bad_dtype = response.data
+        assert ok == {}
+        assert list(taken) == ["name"]
+        assert list(bad_dtype) == ["dtype"]
+        assert Resource.objects.count() == 1
+
+    def test_duplicates_in_the_request(self, auth_client):
+        sha1 = hashlib.sha1(b"x").hexdigest()
+        response = self.check(
+            auth_client,
+            [
+                {"name": "a", "dtype": "spike_times", "sha1": sha1},
+                {"name": "b", "dtype": "spike_times"},
+                {"name": "a", "dtype": "spike_times", "sha1": sha1.upper()},
+            ],
+        )
+        first, second, third = response.data
+        assert first == {} and second == {}
+        assert third == {
+            "name": ["the same as resource 0 in this request"],
+            "sha1": ["the same as resource 0 in this request"],
+        }
+
+    def test_resources_without_names_dont_clash(self, auth_client):
+        body = {"dtype": "spike_times"}
+        response = self.check(auth_client, [body, body])
+        assert response.data == [{}, {}]
+
+    @pytest.mark.parametrize(
+        "bodies",
+        [
+            pytest.param([], id="empty"),
+            pytest.param([{"dtype": "spike_times"}, "a"], id="not-objects"),
+        ],
+    )
+    def test_malformed_requests(self, auth_client, bodies):
+        response = self.check(auth_client, bodies)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "detail" in response.data
+
+    def test_too_many(self, auth_client, monkeypatch):
+        from nbank_registry import views
+
+        monkeypatch.setattr(views, "MAX_RESOURCE_CHECKS", 2)
+        response = self.check(auth_client, [{"dtype": "spike_times"}] * 3)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert "at most 2" in response.data["detail"]
+
+    def test_anonymous_cannot_check(self, client):
+        response = self.check(client, [{"dtype": "spike_times"}])
+        assert response.status_code == status.HTTP_403_FORBIDDEN

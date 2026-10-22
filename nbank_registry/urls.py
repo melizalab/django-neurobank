@@ -36,6 +36,7 @@ urlpatterns = [
         views.LocationDetail.as_view(),
         name="location",
     ),
+    path("check/resources/", views.ResourceCheck.as_view(), name="resource-check"),
     path(
         "bulk/resources/",
         views.bulk_resource_list,

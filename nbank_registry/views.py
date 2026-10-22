@@ -28,6 +28,8 @@ from nbank_registry import (
 )
 
 DOWNLOAD_ARCHIVE_NAME = "registry"
+# the most resources check/resources/ checks in one request
+MAX_RESOURCE_CHECKS = 1000
 
 
 def add_virtual_registry_location(request, resource, qs):
@@ -64,6 +66,9 @@ def api_root(request, format=None):
             ),
             "archives": reverse(
                 "neurobank:archive-list", request=request, format=format
+            ),
+            "check": reverse(
+                "neurobank:resource-check", request=request, format=format
             ),
         }
     )
@@ -269,6 +274,67 @@ class ResourceDetail(generics.RetrieveUpdateDestroyAPIView):
                 {"detail": f"can't delete a resource that supersedes others ({names})"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+
+class ResourceCheck(generics.GenericAPIView):
+    """Checks a resource as it would be created (POST the same body as to
+    resources/), without creating it: that its name and sha1 aren't taken, and
+    that its dtype, archives, experimenter, animal, and metadata are valid.
+
+    Returns 200 if the resource could be created, or 400 with the errors that
+    creating it would give. Another deposit can still take the name or sha1
+    before the resource is created.
+
+    POST a list of bodies to check several resources: the response is 200 with
+    a list of the errors for each one, in order ({} if it could be created). A
+    name or sha1 that an earlier resource in the list has is an error, as it
+    would be if they were created in order.
+    """
+
+    queryset = models.Resource.objects.all()
+    serializer_class = serializers.ResourceSerializer
+    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
+
+    def post(self, request, *args, **kwargs):
+        if isinstance(request.data, list):
+            return self.check_many(request.data)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response({"detail": "the resource can be created"})
+
+    def check_many(self, bodies: list) -> Response:
+        if not bodies:
+            detail = "give at least one resource"
+        elif len(bodies) > MAX_RESOURCE_CHECKS:
+            detail = f"give at most {MAX_RESOURCE_CHECKS} resources"
+        elif not all(isinstance(body, dict) for body in bodies):
+            detail = "each resource must be an object"
+        else:
+            detail = None
+        if detail is not None:
+            return Response({"detail": detail}, status=status.HTTP_400_BAD_REQUEST)
+        results = []
+        earlier = {"name": {}, "sha1": {}}
+        for i, body in enumerate(bodies):
+            serializer = self.get_serializer(data=body)
+            if serializer.is_valid():
+                errors = {}
+            else:
+                errors = {k: list(v) for k, v in serializer.errors.items()}
+            for field, seen in earlier.items():
+                value = body.get(field)
+                if not isinstance(value, str) or not value:
+                    continue
+                if field == "sha1":
+                    value = value.lower()
+                if value in seen:
+                    errors.setdefault(field, []).append(
+                        f"the same as resource {seen[value]} in this request"
+                    )
+                else:
+                    seen[value] = i
+            results.append(errors)
+        return Response(results)
 
 
 @api_view(["GET"])
