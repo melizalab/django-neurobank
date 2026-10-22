@@ -17,3 +17,11 @@ def test_migrations_match_the_models(settings):
     settings.MIGRATION_MODULES = {}
     # exits with status 1 if a migration is missing
     call_command("makemigrations", "--check", "--dry-run", verbosity=0)
+
+
+def test_metadata_aliases_setting_is_an_error(settings):
+    from django.core.management.base import SystemCheckError
+
+    settings.NBANK_METADATA_ALIASES = {"bird": "animal"}
+    with pytest.raises(SystemCheckError, match="NBANK_METADATA_ALIASES"):
+        call_command("check")

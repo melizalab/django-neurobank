@@ -20,6 +20,17 @@ Breaking changes
   does. Requests without a version can still read everything, including the
   bulk endpoints, but anything that would change a record is a 400 that says
   to upgrade neurobank. A request for another version is a 406.
+* The compatibility layer for clients before API 1.2 is gone. ``experimenter``
+  and ``animal`` are only fields: responses no longer copy them into
+  ``metadata``, they're refused as keys in submitted ``metadata`` (400, naming
+  the field to use), and ``metadata__`` searches on them are a 400 pointing to
+  ``?experimenter=`` or ``?animal=``.
+* ``NBANK_METADATA_ALIASES`` is gone; a site that sets it fails Django's system
+  checks.
+* ``normalize_metadata`` only renames metadata keys and maps their values. It no
+  longer moves values into ``experimenter`` and ``animal`` or creates users, and
+  refuses mappings that name the fields or have a ``[users]`` table. Move
+  existing values into the fields with 0.12 before upgrading.
 
 Added
 ~~~~~
@@ -41,6 +52,12 @@ Added
   with the errors creating it would give. POST a list (up to 1,000) to check
   several resources, including against each other: 200 with the errors for each.
   Needs permission to create resources.
+
+Changed
+~~~~~~~
+
+* A resource's ``metadata`` can be sent as null, as a resource without metadata
+  is read, meaning no metadata.
 
 0.12.0 (2026-10-19)
 -------------------

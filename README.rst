@@ -73,9 +73,6 @@ Installation
 
    Other optional settings:
 
-   - ``NBANK_METADATA_ALIASES``: other metadata keys that older clients use for
-     the fields, e.g. ``{"bird": "animal"}`` (for clients written for API 1.1
-     and earlier; see ``CHANGELOG.rst`` for 0.12.0).
    - ``NEUROBANK_AUTO_ID_LENGTH``: the length of the identifiers the registry
      generates (default 8).
    - ``SENDFILE_BACKEND`` and ``SENDFILE_ROOT``, for downloading resources from
@@ -146,7 +143,9 @@ Besides free-form ``metadata``, each resource has two optional fields that
 refer to other records, which can be searched exactly (``?experimenter=``,
 ``?animal=``), excluded (``?animal__neq=``), or tested for a missing value
 (``?animal__isnull=true``). Animals can also be matched by the start of their
-identifier, such as the first part of a UUID (``?animal__istartswith=``):
+identifier, such as the first part of a UUID (``?animal__istartswith=``). They
+are fields only: the registry refuses them as keys in ``metadata`` and in
+``metadata__`` searches.
 
 - ``experimenter``: the username of the person who collected or produced the
   data. It must be a user in the registry database (i.e., the
@@ -201,31 +200,22 @@ Administration
 ~~~~~~~~~~~~~~
 
 One problem with user-defined metadata is that keys and values can be misspelled
-or drift. The ``normalize_metadata`` administrative script can help to address
-some of these issues as they accumulate. You can also use this script when
-migrating from older databases (pre 0.12) to move free-form metadata values into the
-``animal`` and ``experimenter`` fields.
+or drift. The ``normalize_metadata`` administrative command can help to address
+these issues as they accumulate.
 
 To get started, run ``python manage.py normalize_metadata --dry-run >
-mappings.toml``. This reports what would change and writes a template listing
-every value found, with values that can't be stored (an experimenter who isn't a
-user, or an animal that isn't in the animal model) first. Edit it to add:
+mappings.toml``. This reports what would change and writes a template of
+mappings. Edit it to add:
 
-- aliases: other names for a field, whose values move into the field, or for a
-  metadata key, which is renamed (e.g. ``experiment = "protocol"``);
-- inactive users to create;
-- value mappings for the fields (``[animal]``) and for metadata keys
-  (``[metadata.protocol]``): ``"old" = "new"``, or ``"old" = { move = "key" }``
-  to keep a value in metadata under another key and leave the field or key
-  empty. Add an empty table for a metadata key to have the dry run list its
-  values.
+- aliases: other names for a metadata key, which are renamed to it (e.g.
+  ``protcol = "protocol"`` renames ``protcol`` to ``protocol``);
+- value mappings for metadata keys (``[metadata.protocol]``): ``"old" = "new"``,
+  or ``"old" = { move = "key" }`` to keep a value under another key. Add an
+  empty table for a key to have the dry run list its values.
 
-The command doesn't create animals; add placeholder records for the ones that
-aren't in the animal model. Repeat the dry run with ``--mappings mappings.toml``
-until the report looks right, and then run it without ``--dry-run``. Values that
-can't be stored in a field, and resources whose values conflict, are left as
-they are. The command can be run as many times as you want before committing the
-changes by turning off ``--dry-run``.
+Repeat the dry run with ``--mappings mappings.toml`` until the report looks
+right, and then run it without ``--dry-run``. Resources whose values conflict
+are left as they are and reported.
 
 Development
 ~~~~~~~~~~~

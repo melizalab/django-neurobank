@@ -2,9 +2,8 @@
 
 import re
 
-from django.conf import settings
 from django.contrib.auth.models import User
-from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.core.exceptions import ValidationError
 from rest_framework import serializers
 from rest_framework.validators import UniqueTogetherValidator, UniqueValidator
 
@@ -18,46 +17,8 @@ from nbank_registry.models import (
 
 sha1_re = re.compile(r"[0-9a-fA-F]{40}")
 
-# resource fields that clients before API 1.2 sent and read in metadata. For backwards
-# compatibility, these fields are interpolated into the metadata
+# resource fields that refer to other records, which can't also be metadata
 CORE_FIELDS = ("animal", "experimenter")
-
-
-def metadata_keys() -> dict[str, str]:
-    """Returns {metadata key: field} for the core fields and their aliases.
-
-    Aliases come from the NBANK_METADATA_ALIASES setting, e.g. {"bird": "animal"}.
-    """
-    keys = {field: field for field in CORE_FIELDS}
-    for alias, field in getattr(settings, "NBANK_METADATA_ALIASES", {}).items():
-        if field not in CORE_FIELDS:
-            raise ImproperlyConfigured(
-                f"NBANK_METADATA_ALIASES: '{field}' is not one of {CORE_FIELDS}"
-            )
-        keys[alias] = field
-    return keys
-
-
-def split_metadata(metadata: dict) -> tuple[dict, dict]:
-    """Splits out the core fields from metadata. Returns (other metadata, core fields).
-
-    Raises ValueError if two keys for the same field have different values.
-
-    """
-    keys = metadata_keys()
-    rest, found, found_as = {}, {}, {}
-    for key, value in metadata.items():
-        field = keys.get(key)
-        if field is None:
-            rest[key] = value
-        elif field in found and found[field] != value:
-            raise ValueError(
-                f"'{found_as[field]}' and '{key}' have different values for {field}"
-            )
-        else:
-            found[field] = value
-            found_as[field] = key
-    return rest, found
 
 
 SLUG_ERROR_MESSAGES = {
@@ -181,7 +142,7 @@ class ResourceSerializer(serializers.ModelSerializer):
     animal = AnimalField(
         queryset=get_animal_model().objects.all(), required=False, allow_null=True
     )
-    metadata = serializers.JSONField(required=False)
+    metadata = serializers.JSONField(required=False, allow_null=True)
     superseded_by = serializers.SlugRelatedField(
         queryset=Resource.objects.all(),
         slug_field="name",
@@ -195,32 +156,6 @@ class ResourceSerializer(serializers.ModelSerializer):
     superseded_note = serializers.CharField(
         required=False, allow_blank=True, allow_null=True
     )
-
-    def to_internal_value(self, data):
-        """Moves core fields sent in metadata to their own fields."""
-        metadata = data.get("metadata") if isinstance(data, dict) else None
-        if isinstance(metadata, dict):
-            try:
-                rest, found = split_metadata(metadata)
-            except ValueError as err:
-                raise serializers.ValidationError({"metadata": [str(err)]}) from err
-            if found:
-                data = {**data, "metadata": rest}
-                for field, value in found.items():
-                    if field in data and data[field] != value:
-                        raise serializers.ValidationError(
-                            {field: ["differs from the value in metadata"]}
-                        )
-                    data[field] = value
-        return super().to_internal_value(data)
-
-    def to_representation(self, instance):
-        """Copies the core fields into metadata, where clients before API 1.2 read them."""
-        data = super().to_representation(instance)
-        copies = {f: data[f] for f in CORE_FIELDS if data.get(f) is not None}
-        if copies:
-            data["metadata"] = {**(data.get("metadata") or {}), **copies}
-        return data
 
     def is_superuser(self) -> bool:
         try:
@@ -257,9 +192,18 @@ class ResourceSerializer(serializers.ModelSerializer):
         return value
 
     def validate_metadata(self, value):
-        """Ensure that the metadata is a dict"""
+        """Ensure that the metadata is a dict without the core fields. Null, as
+        a resource without metadata is read, is no metadata."""
+        if value is None:
+            return {}
         if not isinstance(value, dict):
             raise serializers.ValidationError("metadata must be a dictionary")
+        for field in CORE_FIELDS:
+            if field in value:
+                raise serializers.ValidationError(
+                    f"'{field}' is a field of the resource, not metadata; send it as "
+                    f"'{field}'"
+                )
         return value
 
     def validate_superseded_note(self, value):

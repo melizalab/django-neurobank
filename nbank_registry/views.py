@@ -236,13 +236,6 @@ class ResourceFilter(filters.FilterSet):
         }
 
 
-# how metadata searches on the core fields map onto the fields
-CORE_FIELD_LOOKUPS = {
-    "animal": "animal__pk",
-    "experimenter": "experimenter__username",
-}
-
-
 # values accepted for metadata__<key>__isnull, case-insensitively
 ISNULL_VALUES = {"true": True, "1": True, "false": False, "0": False}
 
@@ -259,8 +252,8 @@ class ResourceList(generics.ListCreateAPIView):
     `__neq` for exclusions. For example, `?metadata__site=3` will return all
     resources with site set to 3, `?metadata__site__neq=3` will return all
     resources with site set to something else, and `?metadata__site__isnull=True`
-    will return all resources without a value set for `site`. Searches on the
-    core fields (and their aliases) through `metadata__` search the fields.
+    will return all resources without a value set for `site`. The core fields
+    (experimenter, animal) aren't metadata: search them with their own params.
 
     """
 
@@ -280,15 +273,22 @@ class ResourceList(generics.ListCreateAPIView):
         # queries
         mf = {}
         me = {}
-        core_keys = serializers.metadata_keys()
         for param, v in self.request.GET.items():
             if param.startswith("metadata__"):
                 k = param
                 exclude = k.endswith("__neq")
                 if exclude:
                     k = k[:-5]
-                key, _, lookup = k.removeprefix("metadata__").partition("__")
-                field = core_keys.get(key)
+                key = k.removeprefix("metadata__").partition("__")[0]
+                if key in serializers.CORE_FIELDS:
+                    raise ValidationError(
+                        {
+                            param: [
+                                f"'{key}' is a field of the resource, not metadata; "
+                                f"search it with ?{key}="
+                            ]
+                        }
+                    )
                 if k.endswith("__isnull"):
                     try:
                         v = ISNULL_VALUES[v.lower()]
@@ -296,22 +296,13 @@ class ResourceList(generics.ListCreateAPIView):
                         raise ValidationError(
                             {param: ["must be true or false"]}
                         ) from None
-                elif field is None:
+                else:
                     # try to parse the value as json, which will convert numeric
-                    # values; the core fields are strings
+                    # values
                     try:
                         v = json.loads(v)
                     except json.decoder.JSONDecodeError:
                         pass
-                if field is not None:
-                    k = "__".join(filter(None, (CORE_FIELD_LOOKUPS[field], lookup)))
-                    if field == "animal" and lookup in ("", "exact"):
-                        v = animal_pk(v)
-                        if v is None:
-                            # no resource can have this animal
-                            if exclude:
-                                continue
-                            return qs.none()
                 (me if exclude else mf)[k] = v
         return qs.exclude(**me).filter(**mf).order_by("name")
 
