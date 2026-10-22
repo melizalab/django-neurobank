@@ -7,10 +7,24 @@ USERNAME = "user"
 PASSWORD = "password1"
 
 
+# what neurobank 1.0 and later send
+ACCEPT_V2 = "application/json; version=2.0"
+
+
 @pytest.fixture
 def client():
-    """An unauthenticated DRF APIClient (overrides pytest-django's plain Client)."""
-    return APIClient()
+    """An unauthenticated DRF APIClient (overrides pytest-django's plain Client)
+    that asks for API 2.0, as neurobank 1.0 does."""
+    return APIClient(HTTP_ACCEPT=ACCEPT_V2)
+
+
+@pytest.fixture
+def old_client(user):
+    """A client logged in as user that doesn't ask for an API version, as
+    clients before neurobank 1.0 don't."""
+    client = APIClient(HTTP_ACCEPT="application/json")
+    client.login(username=USERNAME, password=PASSWORD)
+    return client
 
 
 @pytest.fixture

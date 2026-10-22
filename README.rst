@@ -111,7 +111,11 @@ Using the registry
 
 The API can be browsed with a web browser. Reading is open to everyone;
 changing anything requires logging in (HTTP Basic or a session) as a user with
-Django's permissions for that kind of record. The endpoints, relative to where
+Django's permissions for that kind of record, and asking for the current API
+version in the ``Accept`` header (``application/json; version=2.0``), as
+neurobank 1.0 and later do. Requests that don't ask for a version can read but
+not change anything, so older clients can still find resources but get a 400
+asking them to upgrade if they try to deposit. The endpoints, relative to where
 the registry's URLs are included:
 
 - ``info/``: the registry's version and API version, and who the request is

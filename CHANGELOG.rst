@@ -10,7 +10,16 @@ on GitHub.
 Unreleased
 ----------
 
-API version 1.3.
+API version 2.0.
+
+Breaking changes
+~~~~~~~~~~~~~~~~
+
+* Changing the registry needs a client that asks for API 2.0, in its
+  ``Accept`` header (``application/json; version=2.0``), as neurobank 1.0
+  does. Requests without a version can still read everything, including the
+  bulk endpoints, but anything that would change a record is a 400 that says
+  to upgrade neurobank. A request for another version is a 406.
 
 Added
 ~~~~~

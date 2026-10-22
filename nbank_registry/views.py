@@ -17,6 +17,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
+from rest_framework.versioning import AcceptHeaderVersioning
 
 from nbank_registry import (
     __version__,
@@ -30,6 +31,45 @@ from nbank_registry import (
 DOWNLOAD_ARCHIVE_NAME = "registry"
 # the most resources check/resources/ checks in one request
 MAX_RESOURCE_CHECKS = 1000
+
+
+class ApiVersioning(AcceptHeaderVersioning):
+    """The API version a request asks for in its Accept header, e.g.
+    `application/json; version=2.0`. Clients before neurobank 1.0 don't ask, so
+    their requests have no version; asking for another version is a 406."""
+
+    allowed_versions = (api_version,)
+
+    def is_allowed_version(self, version):
+        # DRF allows no version only as the default version, which would make
+        # every old client's request look like a current one
+        return version is None or version in self.allowed_versions
+
+
+class ChangesNeedVersion(permissions.BasePermission):
+    """Refuses requests that change the registry unless they ask for the
+    current API version, so clients before neurobank 1.0 can read but not
+    write. The refusal is a 400 rather than a 403 because old clients print a
+    400's messages, and only a generic message for a 403."""
+
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS or request.version is not None:
+            return True
+        raise ValidationError(
+            {
+                "neurobank": [
+                    "this version can no longer change the registry; upgrade to "
+                    "neurobank 1.0 or later"
+                ]
+            }
+        )
+
+
+# for views that change the registry
+CHANGE_PERMISSIONS = (
+    permissions.DjangoModelPermissionsOrAnonReadOnly,
+    ChangesNeedVersion,
+)
 
 
 def add_virtual_registry_location(request, resource, qs):
@@ -230,7 +270,8 @@ class ResourceList(generics.ListCreateAPIView):
     serializer_class = serializers.ResourceSerializer
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = ResourceFilter
-    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
+    permission_classes = CHANGE_PERMISSIONS
+    versioning_class = ApiVersioning
     pagination_class = LinkHeaderPagination
 
     def filter_queryset(self, queryset):
@@ -284,7 +325,8 @@ class ResourceDetail(generics.RetrieveUpdateDestroyAPIView):
         "dtype", "created_by", "experimenter", "superseded_by"
     ).prefetch_related("locations")
     serializer_class = serializers.ResourceSerializer
-    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
+    permission_classes = CHANGE_PERMISSIONS
+    versioning_class = ApiVersioning
 
     def destroy(self, request, *args, **kwargs):
         try:
@@ -317,6 +359,7 @@ class ResourceCheck(generics.GenericAPIView):
     queryset = models.Resource.objects.all()
     serializer_class = serializers.ResourceSerializer
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
+    versioning_class = ApiVersioning
 
     def post(self, request, *args, **kwargs):
         if isinstance(request.data, list):
@@ -378,7 +421,8 @@ class ArchiveList(generics.ListCreateAPIView):
     lookup_field = "name"
     queryset = models.Archive.objects.all()
     serializer_class = serializers.ArchiveSerializer
-    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
+    permission_classes = CHANGE_PERMISSIONS
+    versioning_class = ApiVersioning
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = ArchiveFilter
 
@@ -387,14 +431,16 @@ class ArchiveDetail(generics.RetrieveUpdateAPIView):
     lookup_field = "name"
     queryset = models.Archive.objects.all()
     serializer_class = serializers.ArchiveSerializer
-    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
+    permission_classes = CHANGE_PERMISSIONS
+    versioning_class = ApiVersioning
 
 
 class DataTypeList(generics.ListCreateAPIView):
     lookup_field = "name"
     queryset = models.DataType.objects.all()
     serializer_class = serializers.DataTypeSerializer
-    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
+    permission_classes = CHANGE_PERMISSIONS
+    versioning_class = ApiVersioning
 
 
 class DataTypeDetail(generics.RetrieveAPIView):
@@ -402,13 +448,15 @@ class DataTypeDetail(generics.RetrieveAPIView):
     queryset = models.DataType.objects.all()
     serializer_class = serializers.DataTypeSerializer
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
+    versioning_class = ApiVersioning
 
 
 class LocationList(generics.ListAPIView):
     """List locations for a specific resource"""
 
     serializer_class = serializers.LocationSerializer
-    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
+    permission_classes = CHANGE_PERMISSIONS
+    versioning_class = ApiVersioning
     filter_backends = (filters.DjangoFilterBackend,)
     filterset_class = LocationFilter
 
@@ -458,7 +506,8 @@ class LocationList(generics.ListAPIView):
 class LocationDetail(generics.RetrieveDestroyAPIView):
     queryset = models.Location.objects.all()
     serializer_class = serializers.LocationSerializer
-    permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
+    permission_classes = CHANGE_PERMISSIONS
+    versioning_class = ApiVersioning
 
     def get_object(self):
         return get_object_or_404(

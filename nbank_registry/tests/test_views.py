@@ -13,6 +13,7 @@ import pytest
 from django.contrib.auth.models import Permission, User
 from django.urls import reverse
 from rest_framework import status
+from rest_framework.test import APIClient
 
 from nbank_registry import resource_download
 from nbank_registry.models import Archive, DataType, Location, Resource
@@ -1351,10 +1352,10 @@ class TestDownload:
         assert "download_url" not in response.data
 
 
-def test_api_info_reports_version_1_3(client):
+def test_api_info_reports_version_2_0(client):
     response = client.get(reverse("neurobank:api-info"))
     assert response.status_code == status.HTTP_200_OK
-    assert response.data["api_version"] == "1.3"
+    assert response.data["api_version"] == "2.0"
 
 
 class TestApiInfoUser:
@@ -2064,3 +2065,111 @@ class TestResourceCheckMany:
     def test_anonymous_cannot_check(self, client):
         response = self.check(client, [{"dtype": "spike_times"}])
         assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+class TestOldClients:
+    """Clients before neurobank 1.0 don't ask for an API version: they can read
+    but not change the registry."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, user):
+        self.dtype = DataType.objects.create(name="spike_times")
+        self.archive = Archive.objects.create(
+            name="local", scheme="neurobank", root="/data"
+        )
+        Archive.objects.create(name="other", scheme="neurobank", root="/other")
+        self.resource = Resource.objects.create(
+            name="res", dtype=self.dtype, created_by=user, metadata={"pen": 1}
+        )
+        Location.objects.create(resource=self.resource, archive=self.archive)
+
+    @pytest.mark.parametrize(
+        "method,url,body",
+        [
+            ("get", reverse("neurobank:resource-list"), None),
+            ("get", reverse("neurobank:resource", args=["res"]), None),
+            ("get", reverse("neurobank:location-list", args=["res"]), None),
+            ("get", reverse("neurobank:archive-list"), None),
+            ("get", reverse("neurobank:datatype-list"), None),
+            ("get", reverse("neurobank:api-info"), None),
+            ("post", reverse("neurobank:bulk-resource-list"), {"names": ["res"]}),
+            ("post", reverse("neurobank:bulk-location-list"), {"names": ["res"]}),
+            ("post", reverse("neurobank:resource-check"), {"dtype": "spike_times"}),
+        ],
+    )
+    def test_can_read(self, old_client, method, url, body):
+        response = getattr(old_client, method)(url, body, format="json")
+        assert response.status_code == status.HTTP_200_OK
+
+    @pytest.mark.parametrize(
+        "method,url,body",
+        [
+            ("post", reverse("neurobank:resource-list"), {"dtype": "spike_times"}),
+            ("patch", reverse("neurobank:resource", args=["res"]), {"metadata": {}}),
+            ("put", reverse("neurobank:resource", args=["res"]), {"dtype": "x"}),
+            ("delete", reverse("neurobank:resource", args=["res"]), None),
+            (
+                "post",
+                reverse("neurobank:archive-list"),
+                {"name": "new", "scheme": "neurobank", "root": "/new"},
+            ),
+            ("patch", reverse("neurobank:archive", args=["local"]), {"root": "/x"}),
+            (
+                "post",
+                reverse("neurobank:datatype-list"),
+                {"name": "new", "content_type": "x"},
+            ),
+            (
+                "post",
+                reverse("neurobank:location-list", args=["res"]),
+                {"archive_name": "other"},
+            ),
+            (
+                "patch",
+                reverse("neurobank:location", args=["res", "local"]),
+                {"key": "k"},
+            ),
+            ("delete", reverse("neurobank:location", args=["res", "local"]), None),
+        ],
+    )
+    def test_cannot_change(self, old_client, method, url, body):
+        before = (
+            list(Resource.objects.values()),
+            list(Archive.objects.values()),
+            list(DataType.objects.values()),
+            list(Location.objects.values()),
+        )
+        response = getattr(old_client, method)(url, body, format="json")
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        # a list of messages, which old clients print
+        [message] = response.data["neurobank"]
+        assert "upgrade to neurobank 1.0" in message
+        after = (
+            list(Resource.objects.values()),
+            list(Archive.objects.values()),
+            list(DataType.objects.values()),
+            list(Location.objects.values()),
+        )
+        assert after == before
+
+    def test_anonymous_old_client_is_refused_as_anonymous(self):
+        client = APIClient(HTTP_ACCEPT="application/json")
+        response = client.post(
+            reverse("neurobank:resource-list"), {"dtype": "spike_times"}, format="json"
+        )
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_new_client_can_change(self, auth_client):
+        response = auth_client.patch(
+            reverse("neurobank:resource", args=["res"]),
+            {"metadata": {"pen": 2}},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_unknown_version_is_refused(self, auth_client):
+        response = auth_client.get(
+            reverse("neurobank:resource-list"),
+            HTTP_ACCEPT="application/json; version=3.0",
+        )
+        assert response.status_code == status.HTTP_406_NOT_ACCEPTABLE
