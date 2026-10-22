@@ -79,10 +79,33 @@ def notfound(request):
     return Response({"detail": "not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
+def user_info(user) -> dict | None:
+    """Who a request is from and what they can change in the registry, or None
+    if it's anonymous"""
+    if not user.is_authenticated:
+        return None
+    prefix = f"{models.Resource._meta.app_label}."
+    permissions = sorted(
+        p.removeprefix(prefix)
+        for p in user.get_all_permissions()
+        if p.startswith(prefix)
+    )
+    return {
+        "username": user.username,
+        "superuser": user.is_superuser,
+        "permissions": permissions,
+    }
+
+
 @api_view(["GET"])
 def api_info(request):
     return Response(
-        {"name": "django-neurobank", "version": __version__, "api_version": api_version}
+        {
+            "name": "django-neurobank",
+            "version": __version__,
+            "api_version": api_version,
+            "user": user_info(request.user),
+        }
     )
 
 

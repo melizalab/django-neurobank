@@ -114,7 +114,10 @@ changing anything requires logging in (HTTP Basic or a session) as a user with
 Django's permissions for that kind of record. The endpoints, relative to where
 the registry's URLs are included:
 
-- ``info/``: the registry's version and API version.
+- ``info/``: the registry's version and API version, and who the request is
+  from: ``user`` is null for an anonymous request, or the ``username``, whether
+  they're a ``superuser``, and the registry ``permissions`` they have (e.g.
+  ``add_resource``). Wrong credentials are refused.
 - ``resources/``: list and search resources (GET), register one (POST). See
   OPTIONS for the search parameters; ``metadata__<key>`` searches metadata.
 - ``resources/<name>/``: a resource's record (GET), change it (PUT, PATCH),

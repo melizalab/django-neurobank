@@ -5,6 +5,7 @@ import os
 import posixpath as ppath
 import tempfile
 import uuid
+from base64 import b64encode
 from datetime import datetime
 from pathlib import Path
 
@@ -1354,6 +1355,50 @@ def test_api_info_reports_version_1_3(client):
     response = client.get(reverse("neurobank:api-info"))
     assert response.status_code == status.HTTP_200_OK
     assert response.data["api_version"] == "1.3"
+
+
+class TestApiInfoUser:
+    def info(self, client, **headers):
+        response = client.get(reverse("neurobank:api-info"), **headers)
+        assert response.status_code == status.HTTP_200_OK
+        return response.data["user"]
+
+    def test_anonymous(self, client):
+        assert self.info(client) is None
+
+    def test_superuser(self, auth_client, user):
+        info = self.info(auth_client)
+        assert info["username"] == user.username
+        assert info["superuser"] is True
+        assert {"add_resource", "change_resource", "delete_resource"} <= set(
+            info["permissions"]
+        )
+
+    def test_user_with_some_permissions(self, client, user_password):
+        user = User.objects.create_user(username="normal", password=user_password)
+        user.user_permissions.add(Permission.objects.get(codename="change_resource"))
+        client.login(username="normal", password=user_password)
+        assert self.info(client) == {
+            "username": "normal",
+            "superuser": False,
+            "permissions": ["change_resource"],
+        }
+
+    def test_basic_auth(self, client, user, user_password):
+        # as neurobank authenticates
+        token = b64encode(f"{user.username}:{user_password}".encode()).decode()
+        info = self.info(client, HTTP_AUTHORIZATION=f"Basic {token}")
+        assert info["username"] == user.username
+
+    def test_wrong_password_is_refused(self, client, user):
+        token = b64encode(f"{user.username}:wrong".encode()).decode()
+        response = client.get(
+            reverse("neurobank:api-info"), HTTP_AUTHORIZATION=f"Basic {token}"
+        )
+        assert response.status_code in (
+            status.HTTP_401_UNAUTHORIZED,
+            status.HTTP_403_FORBIDDEN,
+        )
 
 
 class TestCoreFields:
