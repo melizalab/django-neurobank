@@ -121,6 +121,9 @@ the registry's URLs are included:
   ``add_resource``). Wrong credentials are refused.
 - ``resources/``: list and search resources (GET), register one (POST). See
   OPTIONS for the search parameters; ``metadata__<key>`` searches metadata.
+  Results are paginated, with links to other pages in the ``Link`` header; a
+  request with ``Accept: application/x-ndjson`` gets every result in one
+  response, as line-delimited JSON.
 - ``resources/<name>/``: a resource's record (GET), change it (PUT, PATCH),
   delete it (DELETE).
 - ``resources/<name>/locations/``: a resource's locations (GET), add one (POST).
@@ -135,7 +138,8 @@ the registry's URLs are included:
   counting a name or hash that an earlier one in the list has. Another deposit
   can still take a name or hash before the resource is created.
 - ``bulk/resources/``, ``bulk/locations/``: records or locations for many
-  resources at once (POST ``{"names": [...]}``), as line-delimited JSON.
+  resources at once (POST ``{"names": [...]}``), as line-delimited JSON
+  (``application/x-ndjson``).
 - ``download/<name>/``: the resource's file, for resources in archives on the
   server. In a neurobank archive, the location's key is the file's name; for a
   location without a key, the registry looks for the file by the resource's

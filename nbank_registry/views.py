@@ -16,6 +16,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from rest_framework.reverse import reverse
+from rest_framework.settings import api_settings
 from rest_framework.versioning import AcceptHeaderVersioning
 
 from nbank_registry import (
@@ -28,6 +29,30 @@ from nbank_registry import (
 )
 
 DOWNLOAD_ARCHIVE_NAME = "registry"
+# the most records the resource list streams from the database at a time
+STREAM_CHUNK_SIZE = 1000
+
+
+class JSONLRenderer(JSONRenderer):
+    """Renders data as one line of JSON. Streamed responses are a series of these."""
+
+    media_type = "application/x-ndjson"
+    format = "jsonl"
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        out = super().render(data, accepted_media_type=None, renderer_context=None)
+        return out + b"\n"
+
+
+def stream_jsonl(records) -> StreamingHttpResponse:
+    """Returns a response that streams each of records as a line of JSON."""
+    renderer = JSONLRenderer()
+    return StreamingHttpResponse(
+        (renderer.render(record) for record in records),
+        content_type=JSONLRenderer.media_type,
+    )
+
+
 # the most resources check/resources/ checks in one request
 MAX_RESOURCE_CHECKS = 1000
 
@@ -264,6 +289,11 @@ class ResourceList(generics.ListCreateAPIView):
     will return all resources without a value set for `site`. The core fields
     (experimenter, animal) aren't metadata: search them with their own params.
 
+    Results are paginated JSON, with links to the other pages in the Link header.
+    A request that asks for `application/x-ndjson` gets every result in one response
+    instead, streamed as line-delimited JSON. Ask for it alone: JSON wins if both are
+    accepted, as DRF doesn't weigh q values.
+
     """
 
     queryset = models.Resource.objects.select_related(
@@ -275,6 +305,17 @@ class ResourceList(generics.ListCreateAPIView):
     permission_classes = CHANGE_PERMISSIONS
     versioning_class = ApiVersioning
     pagination_class = LinkHeaderPagination
+    # the default renderer comes first, so only a request that asks gets the stream
+    renderer_classes = (*api_settings.DEFAULT_RENDERER_CLASSES, JSONLRenderer)
+
+    def list(self, request, *args, **kwargs):
+        if not isinstance(request.accepted_renderer, JSONLRenderer):
+            return super().list(request, *args, **kwargs)
+        qs = self.filter_queryset(self.get_queryset())
+        return stream_jsonl(
+            self.get_serializer(resource).data
+            for resource in qs.iterator(chunk_size=STREAM_CHUNK_SIZE)
+        )
 
     def filter_queryset(self, queryset):
         qs = super().filter_queryset(queryset)
@@ -553,12 +594,6 @@ def check_bulk_args(request):
     return names
 
 
-class JSONLRenderer(JSONRenderer):
-    def render(self, data, accepted_media_type=None, renderer_context=None):
-        out = super().render(data, accepted_media_type=None, renderer_context=None)
-        return out + b"\n"
-
-
 @api_view(["POST"])
 def bulk_resource_list(request, format=None):
     """Retrieve metadata for multiple resources by name. POST {'names': ['name1', 'name2',...]}.
@@ -575,10 +610,7 @@ def bulk_resource_list(request, format=None):
     qs = models.Resource.objects.filter(query).select_related(
         "experimenter", "superseded_by"
     )
-    renderer = JSONLRenderer()
-    gen = (renderer.render(serializers.ResourceSerializer(obj).data) for obj in qs)
-
-    return StreamingHttpResponse(gen)
+    return stream_jsonl(serializers.ResourceSerializer(obj).data for obj in qs)
 
 
 @api_view(["POST"])
@@ -596,7 +628,6 @@ def bulk_location_list(request, format=None):
     for name in names:
         query |= Q(name=name)
     qs = models.Resource.objects.filter(query).select_related("dtype")
-    renderer = JSONLRenderer()
 
     def gen(qs):
         for resource in qs:
@@ -612,13 +643,11 @@ def bulk_location_list(request, format=None):
                 continue
             if resource.dtype.downloadable and len(request.data) == 0:
                 lqs = add_virtual_registry_location(request, resource, lqs)
-            yield renderer.render(
-                {
-                    "name": resource.name,
-                    "sha1": resource.sha1,
-                    "filename": resource.filename(),
-                    "locations": serializers.LocationSerializer(lqs, many=True).data,
-                }
-            )
+            yield {
+                "name": resource.name,
+                "sha1": resource.sha1,
+                "filename": resource.filename(),
+                "locations": serializers.LocationSerializer(lqs, many=True).data,
+            }
 
-    return StreamingHttpResponse(gen(qs))
+    return stream_jsonl(gen(qs))

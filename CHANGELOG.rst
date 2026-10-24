@@ -47,6 +47,9 @@ Added
 * The resource admin looks up animals and replacements with autocomplete. A
   site with its own animal model gets autocomplete if that model's admin has
   ``search_fields``, and a raw id field otherwise.
+* Searches (``resources/``) can return every result in one streamed response,
+  as line-delimited JSON, instead of pages: ask for ``application/x-ndjson`` in
+  the ``Accept`` header (alone: JSON wins if both are accepted).
 * ``check/resources/`` checks whether a resource could be created, without
   creating it (#11): POST the same body as to ``resources/`` for 200, or 400
   with the errors creating it would give. POST a list (up to 1,000) to check
@@ -60,6 +63,7 @@ Changed
   file's name, as neurobank 1.0 records it. A key that names no file, or isn't
   a plain file name, isn't downloadable. Locations without a key are looked up
   by the resource's name as before.
+* Bulk responses have the content type ``application/x-ndjson``.
 * The registry's download location is listed with the remote locations, before
   offline ones such as tapes, instead of last.
 * A resource's ``metadata`` can be sent as null, as a resource without metadata

@@ -6,7 +6,7 @@ import posixpath as ppath
 import tempfile
 import uuid
 from base64 import b64encode
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -1931,6 +1931,110 @@ class TestSuperseded:
         auth_client.logout()
         with django_assert_max_num_queries(2):
             auth_client.get(reverse("neurobank:resource-list"))
+
+
+# what neurobank asks for when searching
+ACCEPT_STREAM = "application/x-ndjson; version=2.0"
+
+
+def lines(response) -> list:
+    """The records of a streamed response."""
+    content = b"".join(response.streaming_content).decode()
+    return [json.loads(line) for line in content.splitlines()]
+
+
+class TestStreamedResourceList:
+    @pytest.fixture(autouse=True)
+    def setup(self, user, monkeypatch):
+        from nbank_registry import views
+
+        # the default response is paginated, so it can't hold every result
+        monkeypatch.setattr(views.LinkHeaderPagination, "page_size", 2)
+        dtype = DataType.objects.create(name="wav", content_type="audio/wav")
+        self.archives = {
+            name: Archive.objects.create(
+                name=name, scheme="neurobank", root=f"/home/data/{name}"
+            )
+            for name in ("local", "other")
+        }
+        for i in range(7):
+            resource = Resource.objects.create(
+                name=f"res_{i}",
+                sha1=hashlib.sha1(str(i).encode()).hexdigest(),
+                dtype=dtype,
+                created_by=user,
+                metadata={"site": i % 2},
+                superseded_on=datetime(2026, 1, 1, tzinfo=UTC) if i == 6 else None,
+            )
+            archive = self.archives["other" if i >= 5 else "local"]
+            Location.objects.create(resource=resource, archive=archive)
+        self.url = reverse("neurobank:resource-list")
+
+    def test_default_is_paginated(self, client):
+        response = client.get(self.url)
+        assert len(response.data) == 2
+        assert 'rel="next"' in response["Link"]
+
+    def test_stream_has_every_result(self, client):
+        response = client.get(self.url, HTTP_ACCEPT=ACCEPT_STREAM)
+        assert response.status_code == status.HTTP_200_OK
+        assert response["Content-Type"] == "application/x-ndjson"
+        assert "Link" not in response
+        records = lines(response)
+        assert [r["name"] for r in records] == [f"res_{i}" for i in range(7)]
+        # the same records as the paginated response gives
+        page = client.get(self.url, {"page": 1}).data
+        assert records[:2] == json.loads(json.dumps(page))
+
+    @pytest.mark.parametrize(
+        "params, names",
+        [
+            ({"archive": "other"}, ["res_5", "res_6"]),
+            ({"metadata__site": 1}, ["res_1", "res_3", "res_5"]),
+            ({"superseded": "false", "archive": "other"}, ["res_5"]),
+        ],
+    )
+    def test_stream_is_filtered(self, client, params, names):
+        response = client.get(self.url, params, HTTP_ACCEPT=ACCEPT_STREAM)
+        assert [r["name"] for r in lines(response)] == names
+
+    def test_json_wins_when_both_are_accepted(self, client):
+        # DRF doesn't weigh q values: the view's first renderer that matches wins
+        accept = f"{ACCEPT_STREAM}, application/json; version=2.0; q=0.9"
+        response = client.get(self.url, HTTP_ACCEPT=accept)
+        assert response["Content-Type"] == "application/json"
+        assert len(response.data) == 2
+
+    def test_stream_without_a_version(self, client):
+        # reads don't need a version
+        response = client.get(self.url, HTTP_ACCEPT="application/x-ndjson")
+        assert len(lines(response)) == 7
+
+    def test_stream_refused_filter(self, client):
+        response = client.get(
+            self.url, {"metadata__experimenter": "x"}, HTTP_ACCEPT=ACCEPT_STREAM
+        )
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert response["Content-Type"] == "application/x-ndjson"
+        [error] = [json.loads(line) for line in response.content.splitlines()]
+        assert "metadata__experimenter" in error
+
+    def test_stream_query_count_is_constant(
+        self, client, django_assert_max_num_queries
+    ):
+        # resources, and a prefetch of their locations, per chunk
+        with django_assert_max_num_queries(2):
+            response = client.get(self.url, HTTP_ACCEPT=ACCEPT_STREAM)
+            assert len(lines(response)) == 7
+
+    def test_bulk_responses_are_line_delimited_json(self, client):
+        names = {"names": ["res_0", "res_1"]}
+        for endpoint in ("bulk-resource-list", "bulk-location-list"):
+            response = client.post(
+                reverse(f"neurobank:{endpoint}"), names, format="json"
+            )
+            assert response["Content-Type"] == "application/x-ndjson"
+            assert len(lines(response)) == 2
 
 
 class TestResourceCheck:
