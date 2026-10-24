@@ -137,7 +137,9 @@ the registry's URLs are included:
 - ``bulk/resources/``, ``bulk/locations/``: records or locations for many
   resources at once (POST ``{"names": [...]}``), as line-delimited JSON.
 - ``download/<name>/``: the resource's file, for resources in archives on the
-  server.
+  server. In a neurobank archive, the location's key is the file's name; for a
+  location without a key, the registry looks for the file by the resource's
+  name.
 
 Besides free-form ``metadata``, each resource has two optional fields that
 refer to other records, which can be searched exactly (``?experimenter=``,

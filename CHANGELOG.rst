@@ -56,6 +56,10 @@ Added
 Changed
 ~~~~~~~
 
+* Downloads find the file of a location in a neurobank archive by its key, the
+  file's name, as neurobank 1.0 records it. A key that names no file, or isn't
+  a plain file name, isn't downloadable. Locations without a key are looked up
+  by the resource's name as before.
 * A resource's ``metadata`` can be sent as null, as a resource without metadata
   is read, meaning no metadata.
 

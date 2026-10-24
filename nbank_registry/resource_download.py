@@ -2,8 +2,7 @@
 """Helper code to enable resources to be downloaded from the server.
 
 A resource is downloadable if the dtype is marked as downloadable and if it has
-a location that resolves to a local path on the server. The code to resolve this
-local path has been vendored from the neurobank package.
+a location that resolves to a local path on the server.
 
 """
 
@@ -24,6 +23,12 @@ def local_resource_path(resource) -> Path:
 
 
 def location_to_path(location) -> Path:
+    """Returns the path of the file for a location in a neurobank archive.
+
+    The location's key is the name of the file. A location without a key (from a
+    client that doesn't record keys) is looked up by the resource's filename, then
+    its bare name, then any file named with the resource's name and an extension.
+    """
     if location.archive.scheme != "neurobank":
         raise errors.SchemeNotImplementedError()
     resource = location.resource
@@ -31,31 +36,34 @@ def location_to_path(location) -> Path:
     id_stub = id[:2]
     stub_dir = Path(location.archive.root) / "resources" / id_stub
     partial = stub_dir / id
-    # try the predicted names first (cheap stat calls) before globbing the
-    # whole stub directory
-    for candidate in (stub_dir / resource.filename(), partial):
-        if candidate.exists():
-            path = candidate
-            break
+    if location.key is not None:
+        # a key is a file name; a path could reach outside the archive
+        if Path(location.key).name != location.key:
+            raise errors.MissingFileError(resource, stub_dir)
+        path = stub_dir / location.key
+        if not path.exists():
+            raise errors.MissingFileError(resource, stub_dir)
     else:
-        try:
-            path = resolve_extension(partial)
-        except FileNotFoundError as err:
-            raise errors.MissingFileError(resource, stub_dir) from err
+        # try the predicted names first (cheap stat calls) before globbing the
+        # whole stub directory
+        for candidate in (stub_dir / resource.filename(), partial):
+            if candidate.exists():
+                path = candidate
+                break
+        else:
+            try:
+                path = resolve_extension(partial)
+            except FileNotFoundError as err:
+                raise errors.MissingFileError(resource, stub_dir) from err
     if not path.is_file():
         raise errors.NotAFileError(resource, partial)
     return path
 
 
 def resolve_extension(path: Path) -> Path:
-    """Resolves the full path including extension of a resource.
-
-    This function is needed if the 'keep_extension' policy is True, in which
-    case resource 'xyzzy' could refer to a file called 'xyzzy.wav' or
-    'xyzzy.json', etc. If no resource associated with the supplied path exists,
-    raises FileNotFoundError.
-
-    """
+    """Returns the file stored for path, which may have an extension that path lacks:
+    resource 'xyzzy' could be stored as 'xyzzy.wav' or 'xyzzy.json'. Raises
+    FileNotFoundError if there's no such file."""
     if path.exists():
         return path
     paths = path.parent.glob(f"{path.name}.*")

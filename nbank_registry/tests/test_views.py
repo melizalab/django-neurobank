@@ -15,7 +15,7 @@ from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from nbank_registry import resource_download
+from nbank_registry import errors, resource_download
 from nbank_registry.models import Archive, DataType, Location, Resource
 from nbank_registry.views import DOWNLOAD_ARCHIVE_NAME
 
@@ -1193,6 +1193,7 @@ class TestDownload:
         skip_file_creation=False,
         dtype=None,
         archive=None,
+        key=None,
     ):
         if dtype is None:
             dtype = self.dtype
@@ -1206,7 +1207,7 @@ class TestDownload:
             created_by=self.user,
             metadata={"experimenter": "dmeliza"},
         )
-        Location.objects.create(resource=resource, archive=archive)
+        Location.objects.create(resource=resource, archive=archive, key=key)
         fs_path = (
             self.directory / "resources" / resource.name[0:2] / (resource.name + ".bin")
         )
@@ -1339,6 +1340,41 @@ class TestDownload:
     def test_lookup_falls_back_to_glob(self, client):
         location = self.resource.location_set.get()
         assert resource_download.location_to_path(location) == Path(self.fs_path)
+
+    def _keyed(self, key_for, monkeypatch):
+        """A resource stored under a name the dtype doesn't predict, and its
+        location with key_for(stored name) as the key."""
+        resource, path = self._create_file(b"keyed data")
+        location = resource.location_set.get()
+        location.key = key_for(Path(path).name)
+        location.save()
+        self._no_glob(monkeypatch)
+        return location, Path(path)
+
+    def test_lookup_uses_key(self, client, monkeypatch):
+        location, path = self._keyed(lambda name: name, monkeypatch)
+        assert resource_download.location_to_path(location) == path
+        url = reverse("neurobank:resource-download", args=[location.resource])
+        response = client.get(url)
+        assert response.status_code == 200
+        assert ppath.samefile(response["X-Accel-Redirect"], path)
+
+    def test_lookup_key_without_file(self, client, monkeypatch):
+        # the file under another name isn't found: the key is trusted
+        location, _ = self._keyed(lambda name: f"{name}.gone", monkeypatch)
+        with pytest.raises(errors.MissingFileError):
+            resource_download.location_to_path(location)
+        url = reverse("neurobank:resource-download", args=[location.resource])
+        assert client.get(url).status_code == 415
+
+    @pytest.mark.parametrize("prefix", ["../", "sub/", "/"])
+    def test_lookup_key_must_be_a_file_name(self, client, monkeypatch, prefix):
+        location, path = self._keyed(lambda name: f"{prefix}{name}", monkeypatch)
+        # a file where the path would lead, outside the stub directory
+        if prefix == "../":
+            (path.parent.parent / path.name).write_bytes(b"outside")
+        with pytest.raises(errors.MissingFileError):
+            resource_download.location_to_path(location)
 
     def test_non_neurobank_archive_scheme(self, client):
         archive = Archive.objects.create(
