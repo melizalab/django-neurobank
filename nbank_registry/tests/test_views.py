@@ -1244,6 +1244,40 @@ class TestDownload:
             loc["archive_name"] for loc in res_loc
         }
 
+    def _remote_and_offline(self):
+        """Adds locations for self.resource in a remote and an offline archive."""
+        for name, accessibility in (
+            ("tape", Archive.Accessibility.OFFLINE),
+            ("figshare", Archive.Accessibility.REMOTE),
+        ):
+            archive = Archive.objects.create(
+                name=name, scheme=name, root=f"{name}:1", accessibility=accessibility
+            )
+            Location.objects.create(resource=self.resource, archive=archive)
+
+    def test_locations_registry_sorted_before_offline(self, client):
+        self._remote_and_offline()
+        url = reverse("neurobank:location-list", args=[self.resource])
+        response = client.get(url)
+        assert [loc["archive_name"] for loc in response.data] == [
+            self.archive.name,
+            "figshare",
+            DOWNLOAD_ARCHIVE_NAME,
+            "tape",
+        ]
+
+    def test_bulk_locations_registry_sorted_before_offline(self, client):
+        self._remote_and_offline()
+        url = reverse("neurobank:bulk-location-list")
+        response = client.post(url, {"names": [self.resource.name]}, format="json")
+        [record] = [json.loads(line) for line in response]
+        assert [loc["archive_name"] for loc in record["locations"]] == [
+            self.archive.name,
+            "figshare",
+            DOWNLOAD_ARCHIVE_NAME,
+            "tape",
+        ]
+
     def test_bulk_locations_multiple_resources(self, client):
         resource, _path = self._create_file(content=b"something different")
         query = {"names": [self.resource.name, resource.name]}

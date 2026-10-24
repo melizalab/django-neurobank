@@ -60,6 +60,8 @@ Changed
   file's name, as neurobank 1.0 records it. A key that names no file, or isn't
   a plain file name, isn't downloadable. Locations without a key are looked up
   by the resource's name as before.
+* The registry's download location is listed with the remote locations, before
+  offline ones such as tapes, instead of last.
 * A resource's ``metadata`` can be sent as null, as a resource without metadata
   is read, meaning no metadata.
 

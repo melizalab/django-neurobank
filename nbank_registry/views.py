@@ -1,5 +1,4 @@
 # -*- mode: python -*-
-import itertools
 import json
 from urllib.parse import urlparse
 
@@ -78,7 +77,8 @@ def add_virtual_registry_location(request, resource, qs):
     This creates in-memory Archive and Location instances that represent the registry's
     download endpoint. These objects are never saved to the database but work seamlessly
     with our serializers. This does not check whether the file actually exists; this is
-    deferred until the user tries to retrieve it.
+    deferred until the user tries to retrieve it. qs is sorted by accessibility, and the
+    new location goes after the remote ones, before any offline.
 
     """
     base = reverse("neurobank:resource-download-base")
@@ -90,7 +90,16 @@ def add_virtual_registry_location(request, resource, qs):
         accessibility=models.Archive.Accessibility.REMOTE,
     )
     registry_location = models.Location(archive=registry_archive, resource=resource)
-    return itertools.chain(qs, [registry_location])
+    locations = list(qs)
+    i = next(
+        (
+            i
+            for i, location in enumerate(locations)
+            if location.archive.accessibility > registry_archive.accessibility
+        ),
+        len(locations),
+    )
+    return [*locations[:i], registry_location, *locations[i:]]
 
 
 @api_view(["GET"])
