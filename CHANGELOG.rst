@@ -31,6 +31,13 @@ Breaking changes
   longer moves values into ``experimenter`` and ``animal`` or creates users, and
   refuses mappings that name the fields or have a ``[users]`` table. Move
   existing values into the fields with 0.12 before upgrading.
+* Migrating sets the key of each location in a neurobank archive that has
+  none to the resource's file name (its name, plus its datatype's extension if
+  the name has none), as neurobank 1.0 finds files by key. A file stored under
+  another name isn't found until its key is corrected: **after migrating, run**
+  ``nbank check archive --fix --no-hash`` **on each archive**, which sets each
+  key from the file found. A key another location in the archive holds is left
+  unset for the check to fix.
 
 Added
 ~~~~~
