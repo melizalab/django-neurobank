@@ -122,13 +122,18 @@ the registry's URLs are included:
 - ``resources/``: list and search resources (GET), register one (POST). See
   OPTIONS for the search parameters; ``metadata__<key>`` searches metadata.
   Results are paginated, with links to other pages in the ``Link`` header; a
-  request with ``Accept: application/x-ndjson`` gets every result in one
-  response, as line-delimited JSON.
+  request with ``Accept: application/x-ndjson`` and at least one search
+  parameter gets every result in one response, as line-delimited JSON (without
+  one, a 400, so that a mistake doesn't send the whole table).
 - ``resources/<name>/``: a resource's record (GET), change it (PUT, PATCH),
   delete it (DELETE).
 - ``resources/<name>/locations/``: a resource's locations (GET), add one (POST).
 - ``resources/<name>/locations/<archive>/``: one location (GET), change its key
   (PATCH), remove it (DELETE).
+- ``locations/``: every location (GET), with its resource's ``filename`` and
+  ``sha1``, ordered by resource name; search with ``archive``, ``scheme`` and
+  ``has_key``. Paginated, or streamed as line-delimited JSON, as
+  ``resources/`` is. The registry's download locations aren't listed.
 - ``archives/``, ``archives/<name>/``: archives (GET, POST; GET, PUT, PATCH).
 - ``datatypes/``, ``datatypes/<name>/``: data types (GET, POST; GET).
 - ``check/resources/``: whether a resource could be created (POST the same body

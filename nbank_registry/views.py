@@ -53,6 +53,39 @@ def stream_jsonl(records) -> StreamingHttpResponse:
     )
 
 
+class StreamedListMixin:
+    """For list views: paginated JSON by default, or every result in one response,
+    streamed as line-delimited JSON, to a request that asks for
+    `application/x-ndjson`. A stream needs a search parameter, so that a mistake
+    doesn't send the whole table."""
+
+    pagination_class = LinkHeaderPagination
+    # the default renderer comes first, so only a request that asks gets the stream
+    renderer_classes = (*api_settings.DEFAULT_RENDERER_CLASSES, JSONLRenderer)
+
+    def list(self, request, *args, **kwargs):
+        if not isinstance(request.accepted_renderer, JSONLRenderer):
+            return super().list(request, *args, **kwargs)
+        if not self.is_filtered(request):
+            return Response(
+                {
+                    "detail": "a stream needs a search parameter (see OPTIONS); "
+                    "ask for application/json to get every result in pages"
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        qs = self.filter_queryset(self.get_queryset())
+        return stream_jsonl(
+            self.get_serializer(item).data
+            for item in qs.iterator(chunk_size=STREAM_CHUNK_SIZE)
+        )
+
+    def is_filtered(self, request) -> bool:
+        """Whether the request has a parameter the view searches with. Unknown
+        parameters are ignored, so they don't count."""
+        return any(p in self.filterset_class.base_filters for p in request.query_params)
+
+
 # the most resources check/resources/ checks in one request
 MAX_RESOURCE_CHECKS = 1000
 
@@ -141,6 +174,9 @@ def api_root(request, format=None):
             "archives": reverse(
                 "neurobank:archive-list", request=request, format=format
             ),
+            "locations": reverse(
+                "neurobank:all-location-list", request=request, format=format
+            ),
             "check": reverse(
                 "neurobank:resource-check", request=request, format=format
             ),
@@ -194,12 +230,19 @@ class ArchiveFilter(filters.FilterSet):
 
 
 class LocationFilter(filters.FilterSet):
-    archive = filters.CharFilter(field_name="archive__name", lookup_expr="iexact")
+    archive = filters.CharFilter(field_name="archive__name", lookup_expr="exact")
     scheme = filters.CharFilter(field_name="archive__scheme", lookup_expr="iexact")
 
     class Meta:
         model = models.Location
         fields = ["archive", "scheme"]
+
+
+class AllLocationFilter(LocationFilter):
+    has_key = filters.BooleanFilter(method="filter_has_key")
+
+    def filter_has_key(self, queryset, name, value):
+        return queryset.filter(key__isnull=not value)
 
 
 def animal_pk(value):
@@ -274,7 +317,7 @@ class ResourceFilter(filters.FilterSet):
 ISNULL_VALUES = {"true": True, "1": True, "false": False, "0": False}
 
 
-class ResourceList(generics.ListCreateAPIView):
+class ResourceList(StreamedListMixin, generics.ListCreateAPIView):
     """This view is a list of resources in the registry.
 
     Results can be filtered using query params on name, dtype, location, sha1,
@@ -290,9 +333,10 @@ class ResourceList(generics.ListCreateAPIView):
     (experimenter, animal) aren't metadata: search them with their own params.
 
     Results are paginated JSON, with links to the other pages in the Link header.
-    A request that asks for `application/x-ndjson` gets every result in one response
-    instead, streamed as line-delimited JSON. Ask for it alone: JSON wins if both are
-    accepted, as DRF doesn't weigh q values.
+    A request that asks for `application/x-ndjson` and searches with at least one
+    parameter gets every result in one response instead, streamed as line-delimited
+    JSON. Ask for it alone: JSON wins if both are accepted, as DRF doesn't weigh q
+    values.
 
     """
 
@@ -304,17 +348,10 @@ class ResourceList(generics.ListCreateAPIView):
     filterset_class = ResourceFilter
     permission_classes = CHANGE_PERMISSIONS
     versioning_class = ApiVersioning
-    pagination_class = LinkHeaderPagination
-    # the default renderer comes first, so only a request that asks gets the stream
-    renderer_classes = (*api_settings.DEFAULT_RENDERER_CLASSES, JSONLRenderer)
 
-    def list(self, request, *args, **kwargs):
-        if not isinstance(request.accepted_renderer, JSONLRenderer):
-            return super().list(request, *args, **kwargs)
-        qs = self.filter_queryset(self.get_queryset())
-        return stream_jsonl(
-            self.get_serializer(resource).data
-            for resource in qs.iterator(chunk_size=STREAM_CHUNK_SIZE)
+    def is_filtered(self, request) -> bool:
+        return super().is_filtered(request) or any(
+            p.startswith("metadata__") for p in request.query_params
         )
 
     def filter_queryset(self, queryset):
@@ -489,6 +526,28 @@ class DataTypeDetail(generics.RetrieveAPIView):
     queryset = models.DataType.objects.all()
     serializer_class = serializers.DataTypeSerializer
     permission_classes = (permissions.DjangoModelPermissionsOrAnonReadOnly,)
+    versioning_class = ApiVersioning
+
+
+class AllLocationList(StreamedListMixin, generics.ListAPIView):
+    """This view is a list of every location in the registry, with its resource's
+    file name and hash, ordered by resource name.
+
+    Filter with `archive` (the archive's name), `scheme`, and `has_key`. Results are
+    paginated JSON, with links to the other pages in the Link header; a request that
+    asks for `application/x-ndjson` and searches with at least one parameter gets
+    every result in one response instead, streamed as line-delimited JSON. The
+    registry's download locations aren't listed.
+
+    """
+
+    queryset = models.Location.objects.select_related(
+        "archive", "resource__dtype"
+    ).order_by("resource__name", "archive__name")
+    serializer_class = serializers.LocationRecordSerializer
+    filter_backends = (filters.DjangoFilterBackend,)
+    filterset_class = AllLocationFilter
+    permission_classes = CHANGE_PERMISSIONS
     versioning_class = ApiVersioning
 
 

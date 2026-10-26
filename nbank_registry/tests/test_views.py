@@ -1976,15 +1976,26 @@ class TestStreamedResourceList:
         assert 'rel="next"' in response["Link"]
 
     def test_stream_has_every_result(self, client):
-        response = client.get(self.url, HTTP_ACCEPT=ACCEPT_STREAM)
+        params = {"dtype": "wav"}
+        response = client.get(self.url, params, HTTP_ACCEPT=ACCEPT_STREAM)
         assert response.status_code == status.HTTP_200_OK
         assert response["Content-Type"] == "application/x-ndjson"
         assert "Link" not in response
         records = lines(response)
         assert [r["name"] for r in records] == [f"res_{i}" for i in range(7)]
         # the same records as the paginated response gives
-        page = client.get(self.url, {"page": 1}).data
+        page = client.get(self.url, {**params, "page": 1}).data
         assert records[:2] == json.loads(json.dumps(page))
+
+    @pytest.mark.parametrize(
+        "params", [{}, {"format": "jsonl"}, {"dtpye": "wav"}], ids=str
+    )
+    def test_stream_needs_a_search(self, client, params):
+        # a mistake shouldn't send the whole table; unknown parameters don't count
+        response = client.get(self.url, params, HTTP_ACCEPT=ACCEPT_STREAM)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        [error] = [json.loads(line) for line in response.content.splitlines()]
+        assert "a stream needs a search parameter" in error["detail"]
 
     @pytest.mark.parametrize(
         "params, names",
@@ -1992,6 +2003,7 @@ class TestStreamedResourceList:
             ({"archive": "other"}, ["res_5", "res_6"]),
             ({"metadata__site": 1}, ["res_1", "res_3", "res_5"]),
             ({"superseded": "false", "archive": "other"}, ["res_5"]),
+            ({"superseded": "false"}, [f"res_{i}" for i in range(6)]),
         ],
     )
     def test_stream_is_filtered(self, client, params, names):
@@ -2007,7 +2019,9 @@ class TestStreamedResourceList:
 
     def test_stream_without_a_version(self, client):
         # reads don't need a version
-        response = client.get(self.url, HTTP_ACCEPT="application/x-ndjson")
+        response = client.get(
+            self.url, {"dtype": "wav"}, HTTP_ACCEPT="application/x-ndjson"
+        )
         assert len(lines(response)) == 7
 
     def test_stream_refused_filter(self, client):
@@ -2024,7 +2038,7 @@ class TestStreamedResourceList:
     ):
         # resources, and a prefetch of their locations, per chunk
         with django_assert_max_num_queries(2):
-            response = client.get(self.url, HTTP_ACCEPT=ACCEPT_STREAM)
+            response = client.get(self.url, {"dtype": "wav"}, HTTP_ACCEPT=ACCEPT_STREAM)
             assert len(lines(response)) == 7
 
     def test_bulk_responses_are_line_delimited_json(self, client):
@@ -2035,6 +2049,123 @@ class TestStreamedResourceList:
             )
             assert response["Content-Type"] == "application/x-ndjson"
             assert len(lines(response)) == 2
+
+
+class TestAllLocationList:
+    @pytest.fixture(autouse=True)
+    def setup(self, user, monkeypatch):
+        from nbank_registry import views
+
+        monkeypatch.setattr(views.LinkHeaderPagination, "page_size", 2)
+        # downloadable, but the registry's download locations aren't listed
+        dtype = DataType.objects.create(
+            name="wav", content_type="audio/wav", extension="wav", downloadable=True
+        )
+        local = Archive.objects.create(
+            name="local", scheme="neurobank", root="/home/data/local"
+        )
+        backup = Archive.objects.create(
+            name="backup", scheme="neurobank", root="/home/data/backup"
+        )
+        tape = Archive.objects.create(name="tape", scheme="tape", root="tape01:3")
+        resources = [
+            Resource.objects.create(
+                name=f"res_{i}",
+                sha1=hashlib.sha1(str(i).encode()).hexdigest(),
+                dtype=dtype,
+                created_by=user,
+            )
+            for i in range(5)
+        ]
+        for i, resource in enumerate(resources):
+            key = None if i == 4 else f"res_{i}.wav"
+            Location.objects.create(resource=resource, archive=local, key=key)
+        # added last, so they're listed out of the order they were created in
+        for resource in resources[:2]:
+            Location.objects.create(
+                resource=resource, archive=backup, key=f"{resource.name}.wav"
+            )
+        Location.objects.create(resource=resources[3], archive=tape, key="member")
+        self.url = reverse("neurobank:all-location-list")
+
+    def test_listed_at_the_root(self, client):
+        response = client.get(reverse("neurobank:index"))
+        assert response.data["locations"].endswith("/locations/")
+
+    def test_default_is_paginated(self, client):
+        response = client.get(self.url)
+        assert len(response.data) == 2
+        assert 'rel="next"' in response["Link"]
+
+    def test_stream_has_every_match(self, client):
+        params = {"scheme": "neurobank"}
+        response = client.get(self.url, params, HTTP_ACCEPT=ACCEPT_STREAM)
+        assert response.status_code == status.HTTP_200_OK
+        assert response["Content-Type"] == "application/x-ndjson"
+        records = lines(response)
+        assert [(r["resource_name"], r["archive_name"]) for r in records] == [
+            ("res_0", "backup"),
+            ("res_0", "local"),
+            ("res_1", "backup"),
+            ("res_1", "local"),
+            ("res_2", "local"),
+            ("res_3", "local"),
+            ("res_4", "local"),
+        ]
+        assert records[1] == {
+            "archive_name": "local",
+            "scheme": "neurobank",
+            "root": "/home/data/local",
+            "resource_name": "res_0",
+            "key": "res_0.wav",
+            "filename": "res_0.wav",
+            "sha1": hashlib.sha1(b"0").hexdigest(),
+        }
+        page = client.get(self.url, {**params, "page": 1}).data
+        assert records[:2] == json.loads(json.dumps(page))
+
+    @pytest.mark.parametrize("params", [{}, {"archvie": "local"}], ids=str)
+    def test_stream_needs_a_search(self, client, params):
+        response = client.get(self.url, params, HTTP_ACCEPT=ACCEPT_STREAM)
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+    @pytest.mark.parametrize(
+        "params, locations",
+        [
+            ({"archive": "backup"}, [("res_0", "backup"), ("res_1", "backup")]),
+            # archive names are matched exactly, as in resources/
+            ({"archive": "Backup"}, []),
+            ({"scheme": "tape"}, [("res_3", "tape")]),
+            ({"archive": "local", "has_key": "false"}, [("res_4", "local")]),
+            (
+                {"archive": "local", "has_key": "true"},
+                [(f"res_{i}", "local") for i in range(4)],
+            ),
+        ],
+    )
+    def test_stream_is_filtered(self, client, params, locations):
+        response = client.get(self.url, params, HTTP_ACCEPT=ACCEPT_STREAM)
+        assert [(r["resource_name"], r["archive_name"]) for r in lines(response)] == (
+            locations
+        )
+
+    def test_stream_query_count_is_constant(
+        self, client, django_assert_max_num_queries
+    ):
+        # locations, with their archives and resources, in one query per chunk
+        with django_assert_max_num_queries(1):
+            response = client.get(
+                self.url, {"scheme": "neurobank"}, HTTP_ACCEPT=ACCEPT_STREAM
+            )
+            assert len(lines(response)) == 7
+
+    def test_read_only(self, auth_client):
+        response = auth_client.post(
+            self.url,
+            {"archive_name": "local", "resource_name": "res_0"},
+            format="json",
+        )
+        assert response.status_code == status.HTTP_405_METHOD_NOT_ALLOWED
 
 
 class TestResourceCheck:

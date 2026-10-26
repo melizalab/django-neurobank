@@ -389,3 +389,16 @@ class LocationSerializer(serializers.ModelSerializer):
                 fields=("resource_name", "archive_name"),
             )
         ]
+
+
+class LocationRecordSerializer(LocationSerializer):
+    """A location with its resource's file name and hash, for listing locations."""
+
+    filename = serializers.SerializerMethodField()
+    sha1 = serializers.ReadOnlyField(source="resource.sha1")
+
+    def get_filename(self, location) -> str:
+        return location.resource.filename()
+
+    class Meta(LocationSerializer.Meta):
+        fields = (*LocationSerializer.Meta.fields, "filename", "sha1")

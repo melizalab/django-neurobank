@@ -56,7 +56,14 @@ Added
   ``search_fields``, and a raw id field otherwise.
 * Searches (``resources/``) can return every result in one streamed response,
   as line-delimited JSON, instead of pages: ask for ``application/x-ndjson`` in
-  the ``Accept`` header (alone: JSON wins if both are accepted).
+  the ``Accept`` header (alone: JSON wins if both are accepted). A stream needs
+  at least one search parameter (parameters the search doesn't know don't
+  count), and is a 400 without one, so that a mistake doesn't send the whole
+  table.
+* ``locations/`` lists every location, with its resource's file name and hash,
+  searched by ``archive``, ``scheme`` and ``has_key``, and paginated or
+  streamed as ``resources/`` is. neurobank's ``check archive`` gets an
+  archive's locations in one streamed request.
 * ``check/resources/`` checks whether a resource could be created, without
   creating it (#11): POST the same body as to ``resources/`` for 200, or 400
   with the errors creating it would give. POST a list (up to 1,000) to check
@@ -66,6 +73,10 @@ Added
 Changed
 ~~~~~~~
 
+* The ``archive`` filter of locations (``locations/``,
+  ``resources/<name>/locations/`` and ``bulk/locations/``) matches the
+  archive's name exactly, as the resource search's does, instead of ignoring
+  case.
 * Downloads find the file of a location in a neurobank archive by its key, the
   file's name, as neurobank 1.0 records it. A key that names no file, or isn't
   a plain file name, isn't downloadable. Locations without a key are looked up
