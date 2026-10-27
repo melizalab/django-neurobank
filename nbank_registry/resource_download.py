@@ -12,14 +12,25 @@ from nbank_registry import errors
 
 
 def local_resource_path(resource) -> Path:
+    """Returns the path of the resource's file, from the first of its locations that
+    has it on the server.
+
+    Raises NonDownloadableDtypeError if its dtype isn't downloadable. If no location
+    has the file, raises the error of the first location in an archive the server can
+    read (MissingFileError or NotAFileError), or SchemeNotImplementedError if there's
+    no such location.
+    """
     if not resource.dtype.downloadable:
         raise errors.NonDownloadableDtypeError()
+    error = None
     for location in resource.location_set.all():
         try:
             return location_to_path(location)
         except errors.SchemeNotImplementedError:
             pass
-    raise errors.SchemeNotImplementedError()
+        except (errors.MissingFileError, errors.NotAFileError) as err:
+            error = error or err
+    raise error or errors.SchemeNotImplementedError()
 
 
 def location_to_path(location) -> Path:

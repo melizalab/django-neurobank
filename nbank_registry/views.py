@@ -481,17 +481,27 @@ class ResourceCheck(generics.GenericAPIView):
         return Response(results)
 
 
+# the status of each reason a resource can't be downloaded
+_download_status = {
+    errors.MissingFileError: status.HTTP_404_NOT_FOUND,
+    errors.NotAFileError: status.HTTP_404_NOT_FOUND,
+    errors.NonDownloadableDtypeError: status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+    errors.SchemeNotImplementedError: status.HTTP_501_NOT_IMPLEMENTED,
+}
+
+
 @api_view(["GET"])
 def download_resource(request, name):
+    """The resource's file: 404 if there's no such resource or its file isn't on the
+    server, 415 if its dtype isn't downloadable, and 501 if none of its archives uses
+    a scheme the server can read."""
     try:
         resource = models.Resource.objects.get(name=name)
         path = resource_download.local_resource_path(resource)
     except models.Resource.DoesNotExist:
         return Response({"detail": "not found"}, status=status.HTTP_404_NOT_FOUND)
     except errors.NotAvailableForDownloadError as err:
-        return Response(
-            {"detail": str(err)}, status=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE
-        )
+        return Response({"detail": str(err)}, status=_download_status[type(err)])
     return sendfile(request, path, attachment=True)
 
 

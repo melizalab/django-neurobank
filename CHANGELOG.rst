@@ -81,6 +81,11 @@ Changed
   file's name, as neurobank 1.0 records it. A key that names no file, or isn't
   a plain file name, isn't downloadable. Locations without a key are looked up
   by the resource's name as before.
+* A download whose file isn't on the server (or isn't a file) is a 404, and
+  one from an archive whose scheme the server can't read a 501, instead of 415,
+  which is now only for a dtype that isn't downloadable.
+* A download tries each of the resource's locations on the server, so a file
+  missing from one archive is downloaded from another that has it.
 * Bulk responses have the content type ``application/x-ndjson``.
 * The registry's download location is listed with the remote locations, before
   offline ones such as tapes, instead of last.

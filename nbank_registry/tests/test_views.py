@@ -1318,10 +1318,39 @@ class TestDownload:
         missing_resource, _ = self._create_file(b"missing", skip_file_creation=True)
         url = reverse("neurobank:resource-download", args=[missing_resource])
         response = client.get(url)
-        assert response.status_code == 415
+        assert response.status_code == 404
+        assert "Could not find resource" in response.data["detail"]
         url = reverse("neurobank:resource", args=[missing_resource])
         response = client.get(url)
         assert "download_url" not in response.data
+
+    @pytest.mark.parametrize("has_file", ["local", "backup"])
+    def test_missing_file_in_one_archive(self, client, tmp_path, has_file):
+        # the file is downloaded from whichever archive has it
+        backup = Archive.objects.create(
+            name="backup", scheme="neurobank", root=str(tmp_path / "backup")
+        )
+        resource, path = self._create_file(b"one copy", skip_file_creation=True)
+        Location.objects.create(resource=resource, archive=backup)
+        root = self.directory if has_file == "local" else Path(backup.root)
+        stored = root / Path(path).relative_to(self.directory)
+        stored.parent.mkdir(parents=True, exist_ok=True)
+        stored.write_bytes(b"one copy")
+        url = reverse("neurobank:resource-download", args=[resource])
+        response = client.get(url)
+        assert response.status_code == 200
+        assert ppath.samefile(response["X-Accel-Redirect"], stored)
+
+    def test_missing_file_in_every_archive(self, client, tmp_path):
+        other = Archive.objects.create(
+            name="other", scheme="ipfs", root=str(tmp_path / "other")
+        )
+        resource, _ = self._create_file(b"no copies", skip_file_creation=True)
+        Location.objects.create(resource=resource, archive=other)
+        url = reverse("neurobank:resource-download", args=[resource])
+        response = client.get(url)
+        assert response.status_code == 404
+        assert "Could not find resource" in response.data["detail"]
 
     def test_non_downloadable_dtype(self, client):
         non_downloadable_dtype = DataType.objects.create(
@@ -1334,6 +1363,7 @@ class TestDownload:
         url = reverse("neurobank:resource-download", args=[non_downloadable_resource])
         response = client.get(url)
         assert response.status_code == 415
+        assert "not of a downloadable datatype" in response.data["detail"]
         url = reverse("neurobank:resource", args=[non_downloadable_resource])
         response = client.get(url)
         assert "download_url" not in response.data
@@ -1343,7 +1373,8 @@ class TestDownload:
         os.makedirs(path)
         url = reverse("neurobank:resource-download", args=[missing_resource])
         response = client.get(url)
-        assert response.status_code == 415
+        assert response.status_code == 404
+        assert "it is not a file" in response.data["detail"]
         url = reverse("neurobank:resource", args=[missing_resource])
         response = client.get(url)
         assert "download_url" not in response.data
@@ -1399,7 +1430,7 @@ class TestDownload:
         with pytest.raises(errors.MissingFileError):
             resource_download.location_to_path(location)
         url = reverse("neurobank:resource-download", args=[location.resource])
-        assert client.get(url).status_code == 415
+        assert client.get(url).status_code == 404
 
     @pytest.mark.parametrize("prefix", ["../", "sub/", "/"])
     def test_lookup_key_must_be_a_file_name(self, client, monkeypatch, prefix):
@@ -1417,7 +1448,7 @@ class TestDownload:
         resource, _ = self._create_file(b"bad archive", archive=archive)
         url = reverse("neurobank:resource-download", args=[resource])
         response = client.get(url)
-        assert response.status_code == 415
+        assert response.status_code == 501
         url = reverse("neurobank:resource", args=[resource])
         response = client.get(url)
         assert "download_url" not in response.data

@@ -148,7 +148,9 @@ the registry's URLs are included:
 - ``download/<name>/``: the resource's file, for resources in archives on the
   server. In a neurobank archive, the location's key is the file's name; for a
   location without a key, the registry looks for the file by the resource's
-  name.
+  name. 404 if the file isn't on the server, 415 if the dtype isn't
+  downloadable, and 501 if no archive of the resource has a scheme the server
+  can read.
 
 Besides free-form ``metadata``, each resource has two optional fields that
 refer to other records, which can be searched exactly (``?experimenter=``,
