@@ -60,8 +60,8 @@ Added
   at least one search parameter (parameters the search doesn't know don't
   count), and is a 400 without one, so that a mistake doesn't send the whole
   table.
-* ``locations/`` lists every location, with its resource's file name and hash,
-  searched by ``archive``, ``scheme`` and ``has_key``, and paginated or
+* ``locations/`` lists every location, with its resource's file name, hash and
+  dtype, searched by ``archive``, ``scheme`` and ``has_key``, and paginated or
   streamed as ``resources/`` is. neurobank's ``check archive`` gets an
   archive's locations in one streamed request.
 * ``check/resources/`` checks whether a resource could be created, without

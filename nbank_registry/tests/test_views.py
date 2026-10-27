@@ -2120,6 +2120,7 @@ class TestAllLocationList:
             "key": "res_0.wav",
             "filename": "res_0.wav",
             "sha1": hashlib.sha1(b"0").hexdigest(),
+            "dtype": "wav",
         }
         page = client.get(self.url, {**params, "page": 1}).data
         assert records[:2] == json.loads(json.dumps(page))

@@ -130,8 +130,8 @@ the registry's URLs are included:
 - ``resources/<name>/locations/``: a resource's locations (GET), add one (POST).
 - ``resources/<name>/locations/<archive>/``: one location (GET), change its key
   (PATCH), remove it (DELETE).
-- ``locations/``: every location (GET), with its resource's ``filename`` and
-  ``sha1``, ordered by resource name; search with ``archive``, ``scheme`` and
+- ``locations/``: every location (GET), with its resource's ``filename``,
+  ``sha1`` and ``dtype``, ordered by resource name; search with ``archive``, ``scheme`` and
   ``has_key``. Paginated, or streamed as line-delimited JSON, as
   ``resources/`` is. The registry's download locations aren't listed.
 - ``archives/``, ``archives/<name>/``: archives (GET, POST; GET, PUT, PATCH).

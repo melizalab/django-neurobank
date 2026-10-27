@@ -531,7 +531,7 @@ class DataTypeDetail(generics.RetrieveAPIView):
 
 class AllLocationList(StreamedListMixin, generics.ListAPIView):
     """This view is a list of every location in the registry, with its resource's
-    file name and hash, ordered by resource name.
+    file name, hash and dtype, ordered by resource name.
 
     Filter with `archive` (the archive's name), `scheme`, and `has_key`. Results are
     paginated JSON, with links to the other pages in the Link header; a request that
