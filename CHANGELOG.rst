@@ -7,10 +7,12 @@ upload to PyPI for releases that were never tagged. 0.10.13 was never released,
 and 0.6.0 to 0.7.2 were not published to PyPI. Numbers like #46 refer to issues
 on GitHub.
 
-Unreleased
-----------
+1.0.0 (2026-10-29)
+------------------
 
-API version 2.0, for neurobank 1.0.
+This release is synchronized with neurobank 1.0. It introduces API version 2.0, with a number of breaking changes, including the removal of the compatibility layer for the ``experimenter`` and ``animal`` fields, which became
+foreign keys to other models in 0.12. It also introduces a dry run endpoint and streaming replies for ``locations/`` and ``resources/`` to speed up work that requires scanning through a lot of resources, and lays the groundwork for a broader
+range of local, remote, and offline archive types through a location-specific key. Importantly the registry no longer accepts write operations from clients that use the 1.x API.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
