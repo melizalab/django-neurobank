@@ -10,87 +10,53 @@ on GitHub.
 Unreleased
 ----------
 
-API version 2.0.
+API version 2.0, for neurobank 1.0.
 
 Breaking changes
 ~~~~~~~~~~~~~~~~
 
-* Changing the registry needs a client that asks for API 2.0, in its
-  ``Accept`` header (``application/json; version=2.0``), as neurobank 1.0
-  does. Requests without a version can still read everything, including the
-  bulk endpoints, but anything that would change a record is a 400 that says
-  to upgrade neurobank. A request for another version is a 406.
-* The compatibility layer for clients before API 1.2 is gone. ``experimenter``
-  and ``animal`` are only fields: responses no longer copy them into
-  ``metadata``, they're refused as keys in submitted ``metadata`` (400, naming
-  the field to use), and ``metadata__`` searches on them are a 400 pointing to
-  ``?experimenter=`` or ``?animal=``.
-* ``NBANK_METADATA_ALIASES`` is gone; a site that sets it fails Django's system
-  checks.
-* ``normalize_metadata`` only renames metadata keys and maps their values. It no
-  longer moves values into ``experimenter`` and ``animal`` or creates users, and
-  refuses mappings that name the fields or have a ``[users]`` table. Move
-  existing values into the fields with 0.12 before upgrading.
-* Migrating sets the key of each location in a neurobank archive that has
-  none to the resource's file name (its name, plus its datatype's extension if
-  the name has none), as neurobank 1.0 finds files by key. A file stored under
-  another name isn't found until its key is corrected: **after migrating, run**
-  ``nbank check archive --fix --no-hash`` **on each archive**, which sets each
-  key from the file found. A key another location in the archive holds is left
-  unset for the check to fix.
+* Changes need a client that asks for API 2.0 (``Accept: application/json;
+  version=2.0``). Other clients can still read everything, but a change is a
+  400 saying to upgrade neurobank. Asking for another version is a 406.
+* The compatibility layer for clients before API 1.2 is gone: ``experimenter``
+  and ``animal`` aren't copied into ``metadata``, and are refused as metadata
+  keys and in ``metadata__`` searches (400).
+* ``NBANK_METADATA_ALIASES`` is gone (setting it fails a system check), and
+  ``normalize_metadata`` only renames metadata keys and maps their values. Move
+  values into ``experimenter`` and ``animal`` with 0.12 before upgrading.
+* The migration sets the key of each location in a neurobank archive to the
+  resource's file name. **Afterwards, run** ``nbank check archive --fix
+  --no-hash`` **on each archive** to correct files stored under other names.
+* Requires Django REST framework 3.18.2+ (a security fix).
 
 Added
 ~~~~~
 
-* Resources can be marked as superseded or not to be used (#45):
-  ``superseded_on`` (when it was marked; null if the resource can be used), and
-  optionally ``superseded_by`` (the resource to use instead) and
-  ``superseded_note`` (why, or what replaces it), which need ``superseded_on``.
-  Only superusers can mark or unmark a resource, and a resource that supersedes
-  others can't be deleted. Searches: ``?superseded=true|false`` and
-  ``?superseded_by=``. Superseded resources are still listed by default.
-* ``info/`` reports who the request is from (``user``: their username, whether
-  they're a superuser, and their registry permissions), or null if anonymous.
-* The resource admin looks up animals and replacements with autocomplete. A
-  site with its own animal model gets autocomplete if that model's admin has
-  ``search_fields``, and a raw id field otherwise.
-* Searches (``resources/``) can return every result in one streamed response,
-  as line-delimited JSON, instead of pages: ask for ``application/x-ndjson`` in
-  the ``Accept`` header (alone: JSON wins if both are accepted). A stream needs
-  at least one search parameter (parameters the search doesn't know don't
-  count), and is a 400 without one, so that a mistake doesn't send the whole
-  table.
-* ``locations/`` lists every location, with its resource's file name, hash and
-  dtype, searched by ``archive``, ``scheme`` and ``has_key``, and paginated or
-  streamed as ``resources/`` is. neurobank's ``check archive`` gets an
-  archive's locations in one streamed request.
-* ``check/resources/`` checks whether a resource could be created, without
-  creating it (#11): POST the same body as to ``resources/`` for 200, or 400
-  with the errors creating it would give. POST a list (up to 1,000) to check
-  several resources, including against each other: 200 with the errors for each.
-  Needs permission to create resources.
+* Resources can be marked superseded (#45): ``superseded_on``, and optionally
+  ``superseded_by`` and ``superseded_note``. Only superusers can set them, and a
+  replacement can't be deleted. Filters: ``?superseded=`` and
+  ``?superseded_by=``.
+* ``check/resources/`` checks a resource, or a list of up to 1,000, as
+  ``resources/`` would create it, without creating it (#11).
+* ``locations/`` lists locations with their resource's file name, hash and
+  dtype, filtered by ``archive``, ``scheme`` and ``has_key``.
+* ``resources/`` and ``locations/`` stream every result as line-delimited JSON
+  for ``Accept: application/x-ndjson``. A stream needs a search parameter.
+* ``info/`` reports the request's user and their permissions.
+* The resource admin autocompletes animals and replacements (for a site's own
+  animal model, if its admin has ``search_fields``).
 
 Changed
 ~~~~~~~
 
-* The ``archive`` filter of locations (``locations/``,
-  ``resources/<name>/locations/`` and ``bulk/locations/``) matches the
-  archive's name exactly, as the resource search's does, instead of ignoring
-  case.
-* Downloads find the file of a location in a neurobank archive by its key, the
-  file's name, as neurobank 1.0 records it. A key that names no file, or isn't
-  a plain file name, isn't downloadable. Locations without a key are looked up
-  by the resource's name as before.
-* A download whose file isn't on the server (or isn't a file) is a 404, and
-  one from an archive whose scheme the server can't read a 501, instead of 415,
-  which is now only for a dtype that isn't downloadable.
-* A download tries each of the resource's locations on the server, so a file
-  missing from one archive is downloaded from another that has it.
-* Bulk responses have the content type ``application/x-ndjson``.
-* The registry's download location is listed with the remote locations, before
-  offline ones such as tapes, instead of last.
-* A resource's ``metadata`` can be sent as null, as a resource without metadata
-  is read, meaning no metadata.
+* Downloads find a file by its location's key (by name, for a location without
+  one), and try each location on the server. A file not on the server is a 404
+  and an archive the server can't read a 501; 415 is only for a dtype that
+  isn't downloadable.
+* The download location is listed before offline ones (tapes), not last.
+* The ``archive`` filter of locations matches the name exactly.
+* Bulk responses are ``application/x-ndjson``.
+* ``metadata`` can be sent as null.
 
 0.12.0 (2026-10-19)
 -------------------
